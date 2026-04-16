@@ -61,6 +61,175 @@ static int sync_ntp_time(const char *ip, const char *port);
 #define MAX_SERVERS 64
 #define MAX_SAMPLES 64
 #define MARX_K 3  /* Коэффициент для алгоритма Маркса */
+#define VERSION "1.0.0"
+#define DEFAULT_CONFIG_FILE "/etc/time_sync/servers.conf"
+#define DEFAULT_PID_FILE "/var/run/ntpd.pid"
+#define DEFAULT_LOG_FILE "/var/log/ntpd.log"
+
+/* ============================================================================
+ * КОНФИГУРАЦИЯ (CLI + config file)
+ * ============================================================================ */
+
+typedef struct {
+    char *config_file;
+    char *pid_file;
+    char *log_file;
+    char *run_user;
+    int foreground;
+    int debug_level;
+    int no_daemonize;
+    int timeout_sec;
+    int ipv4_only;
+    int ipv6_only;
+} CliConfig;
+
+static CliConfig g_cli = {
+    .config_file = DEFAULT_CONFIG_FILE,
+    .pid_file = DEFAULT_PID_FILE,
+    .log_file = NULL,
+    .run_user = NULL,
+    .foreground = 0,
+    .debug_level = 0,
+    .no_daemonize = 0,
+    .timeout_sec = SYNC_INTERVAL_SECONDS,
+    .ipv4_only = 0,
+    .ipv6_only = 0
+};
+
+static void print_usage(const char *prog) {
+    printf("NTP Server v%s - RFC 5905 compliant\n\n", VERSION);
+    printf("Usage: %s [OPTIONS]\n\n", prog);
+    printf("Options:\n");
+    printf("  -h, --help         Show this help message\n");
+    printf("  -v, --version      Show version information\n");
+    printf("  -c, --config=FILE  Config file path (default: %s)\n", DEFAULT_CONFIG_FILE);
+    printf("  -f, --foreground   Run in foreground (don't daemonize)\n");
+    printf("  -d, --debug        Enable debug mode\n");
+    printf("  -D, --debug=LEVEL   Set debug level (0-3)\n");
+    printf("  -l, --log=FILE     Log file path\n");
+    printf("  -n, --no-daemonize Same as -f (run in foreground)\n");
+    printf("  -t, --timeout=SEC  Sync timeout in seconds (default: %d)\n", SYNC_INTERVAL_SECONDS);
+    printf("  -4, --ipv4-only    Use IPv4 only\n");
+    printf("  -6, --ipv6-only    Use IPv6 only\n");
+    printf("  -u, --user=USER    Run as specified user\n");
+    printf("  -p, --pid=FILE     PID file path (default: %s)\n", DEFAULT_PID_FILE);
+    printf("\n");
+}
+
+static void print_version(void) {
+    printf("ntpd %s - NTP Server (RFC 5905)\n", VERSION);
+    printf("Built: %s %s\n", __DATE__, __TIME__);
+}
+
+static int parse_arguments(int argc, char *argv[]) {
+    int i = 1;
+    while (i < argc) {
+        char *arg = argv[i];
+        
+        /* Help and version - handled before but also check here */
+        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
+            print_usage(argv[0]);
+            exit(EXIT_SUCCESS);
+        }
+        if (strcmp(arg, "-v") == 0 || strcmp(arg, "--version") == 0) {
+            print_version();
+            exit(EXIT_SUCCESS);
+        }
+        
+        if (strcmp(arg, "-c") == 0 || strcmp(arg, "--config") == 0) {
+            if (i + 1 < argc) {
+                g_cli.config_file = argv[++i];
+            } else if (i + 1 < argc && argv[i + 1][0] != '-') {
+                g_cli.config_file = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -c requires config file path\n");
+                return -1;
+            }
+        }
+        if (strncmp(arg, "--config=", 9) == 0) {
+            g_cli.config_file = arg + 9;
+        }
+        else if (strcmp(arg, "-f") == 0 || strcmp(arg, "--foreground") == 0) {
+            g_cli.foreground = 1;
+        }
+        else if (strcmp(arg, "-d") == 0 || strcmp(arg, "--debug") == 0) {
+            g_cli.debug_level = 1;
+        }
+        else if (strcmp(arg, "-D") == 0 || strncmp(arg, "--debug=", 8) == 0) {
+            if (strncmp(arg, "--debug=", 8) == 0) {
+                g_cli.debug_level = atoi(arg + 8);
+            } else if (i + 1 < argc) {
+                g_cli.debug_level = atoi(argv[++i]);
+            } else {
+                g_cli.debug_level = 1;
+            }
+        }
+        else if (strcmp(arg, "-l") == 0 || strcmp(arg, "--log") == 0) {
+            if (i + 1 < argc) {
+                g_cli.log_file = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -l requires log file path\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--log=", 6) == 0) {
+            g_cli.log_file = arg + 6;
+        }
+        else if (strcmp(arg, "-n") == 0 || strcmp(arg, "--no-daemonize") == 0) {
+            g_cli.no_daemonize = 1;
+        }
+        else if (strcmp(arg, "-t") == 0 || strcmp(arg, "--timeout") == 0) {
+            if (i + 1 < argc) {
+                g_cli.timeout_sec = atoi(argv[++i]);
+                if (g_cli.timeout_sec <= 0) g_cli.timeout_sec = SYNC_INTERVAL_SECONDS;
+            } else {
+                fprintf(stderr, "Error: -t requires timeout value\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--timeout=", 10) == 0) {
+            g_cli.timeout_sec = atoi(arg + 10);
+            if (g_cli.timeout_sec <= 0) g_cli.timeout_sec = SYNC_INTERVAL_SECONDS;
+        }
+        else if (strcmp(arg, "-4") == 0 || strcmp(arg, "--ipv4-only") == 0) {
+            g_cli.ipv4_only = 1;
+            g_cli.ipv6_only = 0;
+        }
+        else if (strcmp(arg, "-6") == 0 || strcmp(arg, "--ipv6-only") == 0) {
+            g_cli.ipv6_only = 1;
+            g_cli.ipv4_only = 0;
+        }
+        else if (strcmp(arg, "-u") == 0 || strcmp(arg, "--user") == 0) {
+            if (i + 1 < argc) {
+                g_cli.run_user = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -u requires username\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--user=", 8) == 0) {
+            g_cli.run_user = arg + 8;
+        }
+        else if (strcmp(arg, "-p") == 0 || strcmp(arg, "--pid") == 0) {
+            if (i + 1 < argc) {
+                g_cli.pid_file = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -p requires pid file path\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--pid=", 6) == 0) {
+            g_cli.pid_file = arg + 6;
+        }
+        else {
+            fprintf(stderr, "Unknown option: %s\n", arg);
+            print_usage(argv[0]);
+            return -1;
+        }
+        i++;
+    }
+    return 0;
+}
 
 /* ============================================================================
  * СТРУКТУРА NTP-ПАКЕТА (NTPv4)
@@ -998,9 +1167,10 @@ static void signal_handler(int sig) {
  * @brief Загружает конфигурацию серверов
  */
 static int load_server_config(void) {
-    FILE *fp = fopen(CONFIG_FILE, "r");
+    const char *config_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
+    FILE *fp = fopen(config_path, "r");
     if (!fp) {
-        syslog(LOG_WARNING, "Файл конфигурации не найден: %s", CONFIG_FILE);
+        syslog(LOG_WARNING, "Файл конфигурации не найден: %s", config_path);
         return 0;
     }
 
@@ -1282,14 +1452,37 @@ void cleanup_resources(void) {
  * ============================================================================ */
 
 int main(int argc, char *argv[]) {
-    (void)argc;  /* argc не используется */
-    (void)argv;  /* argv не используется */
+    /* Парсинг аргументов командной строки - ДО check для help/version */
+    if (argc > 1) {
+        if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
+            print_usage(argv[0]);
+            exit(EXIT_SUCCESS);
+        }
+        if (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0) {
+            print_version();
+            exit(EXIT_SUCCESS);
+        }
+    }
+    
+    /* Парсинг остальных аргументов */
+    if (parse_arguments(argc, argv) != 0) {
+        return EXIT_FAILURE;
+    }
+
+    /* Debug mode - выводим в stdout вместо syslog */
+    if (g_cli.debug_level > 0) {
+        fprintf(stderr, "Debug mode enabled (level %d)\n", g_cli.debug_level);
+    }
 
     /* Регистрация функции очистки при выходе */
     atexit(cleanup_resources);
 
     /* Инициализация системного логгера */
-    openlog("ntpd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
+    if (g_cli.foreground || g_cli.debug_level > 0) {
+        openlog("ntpd", LOG_PID | LOG_NDELAY, LOG_USER);
+    } else {
+        openlog("ntpd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
+    }
 
     g_local_precision = get_system_precision();
     syslog(LOG_INFO, "System precision: %d (2^%d = %.3f сек)", 
@@ -1306,9 +1499,11 @@ int main(int argc, char *argv[]) {
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGALRM, &sa, NULL);
 
-    /* Демонизация */
-    setsid();
-    umask(0);
+    /* Демонизация (только если не foreground) */
+    if (!g_cli.foreground && !g_cli.no_daemonize) {
+        setsid();
+        umask(0);
+    }
 
     /* Загрузка конфигурации */
     g_server_count = load_server_config();
