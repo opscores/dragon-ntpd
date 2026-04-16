@@ -189,6 +189,24 @@ static uint32_t g_local_root_disp = 0;  /* 16.16 */
 static uint8_t g_local_li = 3;          /* 3 = alarm when unsynced */
 
 static int8_t g_local_precision = -20;  /* system precision (log2 seconds), initialized at startup */
+static int8_t g_local_poll = 4;           /* poll exponent (log2 seconds), default 16 sec */
+static int8_t g_peer_poll = 4;           /* last received poll from peer */
+
+static int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us) {
+    int8_t new_poll = current_poll;
+    
+    if (peer_poll < current_poll) {
+        new_poll = peer_poll;
+    }
+    
+    if (delay_us > 100000 || offset_us > 50000 || offset_us < -50000) {
+        if (new_poll < 12) new_poll++;
+    } else if (delay_us < 10000 && offset_us > -10000 && offset_us < 10000) {
+        if (new_poll > 4) new_poll--;
+    }
+    
+    return new_poll;
+}
 
 static int8_t get_system_precision(void) {
     struct timespec ts;
@@ -368,7 +386,7 @@ static void create_ntp_request(void *buffer, NtpTimestamp *xmit_out) {
     /* LI=0, VN=4, Mode=3 (client) */
     p[0] = (uint8_t)((0u << NTP_LI_SHIFT) | ((uint8_t)NTP_VN_4 << NTP_VN_SHIFT) | 3u);
     p[1] = 0;              /* stratum */
-    p[2] = 4;                       /* poll */
+    p[2] = g_local_poll;                  /* poll (dynamic) */
     p[3] = (uint8_t)g_local_precision; /* precision (вычисляется при старте) */
 
     /* Transmit timestamp (T1) */
@@ -1006,8 +1024,14 @@ static int sync_ntp_time(const char *ip, const char *port) {
                 uint64_t delay_us;
                 int64_t offset_us;
                 if (calculate_delay_offset(&t1, &pkt.recv_ts, &pkt.xmit_ts, &t4, &delay_us, &offset_us)) {
+                    /* Сохраняем poll от peer для динамического poll interval */
+                    g_peer_poll = pkt.poll;
+
                     /* Вычислим нашу страту от страты peer */
                     uint8_t stratum = ntp_local_stratum_from_peer(pkt.stratum);
+
+                    /* Динамический poll interval на основе условий сети */
+                    g_local_poll = adjust_poll_interval(g_local_poll, g_peer_poll, delay_us, offset_us);
 
                     /* Добавление образца в кэш */
                     marx_add_sample_us((uint64_t)ntp_timestamp_to_ns(&t4), delay_us, offset_us);
