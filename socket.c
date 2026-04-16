@@ -83,7 +83,6 @@ static void *handle_peer_request_thread(void *arg) {
     size_t size = data->size;
     const char *ip = data->ip;
     const char *port = data->port;
-    free(data);
 
     syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен", ip, port);
 
@@ -266,7 +265,10 @@ void handle_client_request(const void *buffer, size_t size,
         return;
     }
 
+    /* Очистка структуры после создания потока (не освобождать в потоке!) */
     pthread_detach(thread);
+    free(data);
+
     syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен", ip, port);
 }
 

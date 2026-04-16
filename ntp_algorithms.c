@@ -108,20 +108,43 @@ uint32_t ntp_u16_16_from_us(uint64_t us) {
 }
 
 uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us) {
-    time_t now = time(NULL);
-    if (g_last_dispersion_update == 0) {
-        g_last_dispersion_update = now;
+    /* Защита от race condition с g_last_dispersion_update */
+    pthread_mutex_lock(&g_mutex);
+    time_t last_update = g_last_dispersion_update;
+    pthread_mutex_unlock(&g_mutex);
+
+    if (last_update == 0) {
+        g_last_dispersion_update = time(NULL);
         return current_disp;
     }
 
-    double elapsed = (double)(now - g_last_dispersion_update);
-    if (elapsed < 0) elapsed = 0;
+    /* Вычисление elapsed с защитой от race condition */
+    time_t now = time(NULL);
+    int64_t elapsed_sec = (int64_t)now - (int64_t)last_update;
+    if (elapsed_sec < 0) elapsed_sec = 0;
 
-    double phi_dispersion = (PHI * elapsed) / 1000000.0;
-    uint64_t disp_us = offset_us;  // offset_us уже unsigned, берём абсолютное значение
+    /* Вычисление phi_dispersion с защитой от overflow */
+    /* PHI = 15, elapsed_sec >= 0 */
+    double phi_dispersion = ((double)(int64_t)PHI * (double)elapsed_sec) / 1000000.0;
 
-    double new_disp = phi_dispersion + (double)disp_us + (double)jitter_us;
-    if (new_disp > (double)UINT32_MAX) new_disp = (double)UINT32_MAX;
+    /* Проверка на overflow перед сложением */
+    /* Максимальное значение UINT32_MAX = 4294967295 */
+    /* Проверка: phi_dispersion + disp_us + jitter_us <= UINT32_MAX */
+    uint64_t disp_us = offset_us;  /* offset_us уже unsigned, берём абсолютное значение */
+    uint64_t jitter_us_val = jitter_us;
+
+    /* Проверка: phi_dispersion + disp_us <= UINT32_MAX */
+    if (disp_us > (uint64_t)UINT32_MAX) {
+        disp_us = UINT32_MAX;
+    }
+
+    /* Проверка: phi_dispersion + disp_us + jitter_us <= UINT32_MAX */
+    double new_disp;
+    if (phi_dispersion > (double)UINT32_MAX - (double)disp_us - (double)jitter_us_val) {
+        new_disp = (double)UINT32_MAX;
+    } else {
+        new_disp = phi_dispersion + (double)disp_us + (double)jitter_us_val;
+    }
 
     g_last_dispersion_update = now;
     return ntp_u16_16_from_us((uint64_t)new_disp);
