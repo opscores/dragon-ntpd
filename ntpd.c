@@ -735,10 +735,30 @@ static void handle_client_request(const void *buffer, size_t size,
     }
 
     uint8_t li = (uint8_t)((pkt.li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
+    uint8_t vn = (uint8_t)((pkt.li_vn_mode & NTP_VN_MASK) >> NTP_VN_SHIFT);
     uint8_t mode = (uint8_t)(pkt.li_vn_mode & NTP_MODE_MASK);
 
+    /* RFC 5905 Section 3: проверяем mode */
     if (mode != 3) {
         syslog(LOG_WARNING, "Не client mode пакет (mode=%u) от %s:%s", mode, ip, port);
+        return;
+    }
+
+    /* RFC 5905: проверяем версию */
+    if (vn != NTP_VN_4) {
+        syslog(LOG_WARNING, "Неверная версия NTP: %u от %s:%s", vn, ip, port);
+        return;
+    }
+
+    /* RFC 5905 Section 7.4: KoD пакет (stratum 0) - отклоняем */
+    if (ntp_is_kod(&pkt)) {
+        char kod[5];
+        kod[0] = (char)((pkt.ref_id >> 24) & 0xFF);
+        kod[1] = (char)((pkt.ref_id >> 16) & 0xFF);
+        kod[2] = (char)((pkt.ref_id >> 8) & 0xFF);
+        kod[3] = (char)(pkt.ref_id & 0xFF);
+        kod[4] = '\0';
+        syslog(LOG_WARNING, "KoD пакет от %s:%s (code=%s) - отклонён", ip, port, kod);
         return;
     }
 

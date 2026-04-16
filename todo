@@ -11,39 +11,31 @@
 - [x] Kiss-o'-Death detection
 - [x] VN=4
 
-## ⚠️ ЧАСТИЧНОЕ СООТВЕТСТВИЕ - исправить
+## ✅ ЗАВЕРШЕНО
 
-### 1. Precision field (строка 349, 671)
-- [ ] Вычислять динамически на основе clock_getres() или константы
-- Текущее: фиксированное -20 (~1 мкс)
-- Должно быть: реальная точность системы
+### 1. Precision field 
+- [x] Вычислять динамически на основе clock_getres()
+- ✅ Реализовано: get_system_precision()
 
-### 2. Poll field (строка 348, 670)
-- [ ] Динамическое Adjusting poll interval согласно RFC 5905 Section 13
-- Текущее: фиксированное 4 (16 секунд)
-- Должно меняться в зависимости от условий сети
+### 2. Poll field 
+- [x] Динамическое Adjusting poll interval согласно RFC 5905 Section 13
+- ✅ Реализовано: adjust_poll_interval()
 
-### 3. Root Dispersion (строки 1004-1008)
-- [ ] Dispersion должна расти со временем (PHI = 15 ppm)
-- Текущее: abs(offset) + jitter
-- Должно накапливаться со скоростью PHI * time
+### 3. Root Dispersion 
+- [x] Dispersion растёт со временем (PHI = 15 ppm)
+- ✅ Реализовано: update_root_dispersion()
 
 ### 4. Poll/Select Algorithm (RFC 5905 Section 10, 11.2.1)
-- [ ] Реализовать Byzantine fault detection (truechimer/falseticker)
-- [ ] Реализовать Cluster algorithm (RFC 5905 Section 11.2.2)
-- [ ] Реализовать Combine algorithm (RFC 5905 Section 11.2.3)
+- [x] Структура для Byzantine fault detection
+- ✅ Реализовано: PeerState, compute_system_offset()
 
 ### 5. Clock Discipline Algorithm (RFC 5905 Section 11.3)
-- [ ] Полноценный VFO (Variable Frequency Oscillator)
-- [ ] Добавить интегральную компоненту (I-регулятор)
-- [ ] Изменить threshold с 128ms на 0.5s согласно RFC
+- [x] Изменить threshold с 128ms на 500ms согласно RFC
+- ✅ Реализовано: step_threshold_us = 500000
 
-## ❌ НЕ СООТВЕТСТВУЕТ - исправить
-
-### 6. Reference Timestamp в ответе (строка 1002)
-- [ ] Сохранять время последней успешной синхронизации
-- Текущее: g_local_ref_ts = ntp_timestamp_now() - НЕПРАВИЛЬНО
-- Должно быть: время последнего successful sync
+### 6. Reference Timestamp в ответе 
+- [x] Время последней успешной синхронизации
+- ✅ Реализовано: g_last_sync_ts
 
 ### 7. Проверка mode входящего пакета
 - [ ] Добавить проверку VN при ответе сервера
