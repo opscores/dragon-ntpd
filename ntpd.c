@@ -213,6 +213,22 @@ typedef struct {
 static PeerState g_peers[MAX_PEERS];
 static int g_peer_count = 0;
 static int g_selected_peer = -1;
+static int g_sync_sock = -1;  /* reusable UDP socket for NTP sync */
+
+static int get_sync_socket(void) {
+    if (g_sync_sock >= 0) return g_sync_sock;
+    
+    g_sync_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (g_sync_sock < 0) {
+        syslog(LOG_ERR, "Не удалось создать сокет синхронизации: %s", strerror(errno));
+        return -1;
+    }
+    
+    int reuse = 1;
+    setsockopt(g_sync_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    
+    return g_sync_sock;
+}
 
 static uint8_t compute_system_offset(int8_t *offsets, int count, int *best_idx) {
     if (count < 2 || best_idx == NULL) {
@@ -916,10 +932,10 @@ static int create_udp_socket(int port) {
 }
 
 /**
- * @brief Закрывает сокет
+ * @brief Закрывает сокет (не закрывает глобальный sync сокет)
  */
 static void close_socket(int sock) {
-    if (sock >= 0) {
+    if (sock >= 0 && sock != g_sync_sock) {
         close(sock);
     }
 }
@@ -1019,9 +1035,8 @@ static int load_server_config(void) {
  * @brief Синхронизирует время с NTP-сервером
  */
 static int sync_ntp_time(const char *ip, const char *port) {
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    int sock = get_sync_socket();
     if (sock < 0) {
-        syslog(LOG_ERR, "Ошибка сокета: %s", strerror(errno));
         return -1;
     }
 
