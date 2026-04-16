@@ -19,9 +19,18 @@ static int skip_extension_fields(const uint8_t *data, size_t size) {
         uint16_t field_type = (uint16_t)((data[pos] << 8) | data[pos + 1]);
         uint16_t field_len = (uint16_t)((data[pos + 2] << 8) | data[pos + 3]);
 
-        if (field_len < 4) break;
-        if (pos + field_len > size) break;
-        if (field_type == 0) break;
+        /* Kiss-o'-Death marker: type=0, length=2 (RFC 5905 §2.1) */
+        if (field_type == 0 && field_len == 2) {
+            syslog(LOG_INFO, "Kiss-o'-Death marker detected at offset %zu", pos);
+            return (int)(pos + field_len - 48);
+        }
+
+        /* Проверка на корректную длину поля */
+        if (field_len < 4 || pos + field_len > size) {
+            syslog(LOG_WARNING, "Некорректный extension field: type=%u, len=%u at offset %zu",
+                   field_type, field_len, pos);
+            break;
+        }
 
         pos += field_len;
     }
@@ -45,8 +54,8 @@ bool parse_ntp_packet(const void *buffer, size_t size, NtpPacket *pkt) {
     if (ext_len > 0) {
         syslog(LOG_DEBUG, "Пропускаем extension fields: %d байт", ext_len);
     }
-    (void)ext_len;
 
+    /* Парсинг только основных 48 байт, игнорируя extension fields */
     pkt->li_vn_mode = data[0];
     pkt->stratum = data[1];
     pkt->poll = (int8_t)data[2];
