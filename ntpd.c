@@ -37,6 +37,8 @@
 #include <inttypes.h>
 #include <stddef.h>
 #include <sys/time.h>
+#include <pwd.h>
+#include <unistd.h>
 
 /* ============================================================================
  * ФУНКЦИОНАЛЬНЫЕ ОБЪЯВЛЕНИЯ
@@ -1548,6 +1550,40 @@ int main(int argc, char *argv[]) {
                 syslog(LOG_INFO, "PID файл записан: %s (PID=%d)", g_cli.pid_file, (int)getpid());
             } else {
                 syslog(LOG_WARNING, "Не удалось записать PID файл: %s: %s", g_cli.pid_file, strerror(errno));
+            }
+        }
+
+        /* Сменить пользователя если указан */
+        if (g_cli.run_user != NULL) {
+            struct passwd *pw = getpwnam(g_cli.run_user);
+            if (pw != NULL) {
+                if (setgid(pw->pw_gid) != 0) {
+                    syslog(LOG_ERR, "Не удалось setgid(%s): %s", g_cli.run_user, strerror(errno));
+                } else if (setuid(pw->pw_uid) != 0) {
+                    syslog(LOG_ERR, "Не удалось setuid(%s): %s", g_cli.run_user, strerror(errno));
+                } else {
+                    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)", 
+                         g_cli.run_user, (int)pw->pw_uid, (int)pw->pw_gid);
+                }
+            } else {
+                syslog(LOG_ERR, "Пользователь не найден: %s", g_cli.run_user);
+            }
+        }
+    } else {
+        /* Foreground mode: смена пользователя сразу */
+        if (g_cli.run_user != NULL) {
+            struct passwd *pw = getpwnam(g_cli.run_user);
+            if (pw != NULL) {
+                if (setgid(pw->pw_gid) != 0) {
+                    syslog(LOG_ERR, "Не удалось setgid(%s): %s", g_cli.run_user, strerror(errno));
+                } else if (setuid(pw->pw_uid) != 0) {
+                    syslog(LOG_ERR, "Не удалось setuid(%s): %s", g_cli.run_user, strerror(errno));
+                } else {
+                    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)", 
+                         g_cli.run_user, (int)pw->pw_uid, (int)pw->pw_gid);
+                }
+            } else {
+                syslog(LOG_ERR, "Пользователь не найден: %s", g_cli.run_user);
             }
         }
     }
