@@ -75,12 +75,12 @@ typedef struct {
     char *pid_file;
     char *log_file;
     char *run_user;
+    char *interface;
     int foreground;
     int debug_level;
     int no_daemonize;
     int timeout_sec;
-    int ipv4_only;
-    int ipv6_only;
+    int quit_after_sync;
 } CliConfig;
 
 static CliConfig g_cli = {
@@ -88,12 +88,12 @@ static CliConfig g_cli = {
     .pid_file = DEFAULT_PID_FILE,
     .log_file = NULL,
     .run_user = NULL,
+    .interface = NULL,
     .foreground = 0,
     .debug_level = 0,
     .no_daemonize = 0,
     .timeout_sec = SYNC_INTERVAL_SECONDS,
-    .ipv4_only = 0,
-    .ipv6_only = 0
+    .quit_after_sync = 0
 };
 
 static void print_usage(const char *prog) {
@@ -102,15 +102,17 @@ static void print_usage(const char *prog) {
     printf("Options:\n");
     printf("  -h, --help         Show this help message\n");
     printf("  -v, --version      Show version information\n");
+    printf("  -V, --verbose      Verbose output (same as -v)\n");
     printf("  -c, --config=FILE  Config file path (default: %s)\n", DEFAULT_CONFIG_FILE);
     printf("  -f, --foreground   Run in foreground (don't daemonize)\n");
-    printf("  -d, --debug        Enable debug mode\n");
-    printf("  -D, --debug=LEVEL   Set debug level (0-3)\n");
-    printf("  -l, --log=FILE     Log file path\n");
     printf("  -n, --no-daemonize Same as -f (run in foreground)\n");
+    printf("  -d, --debug        Enable debug mode\n");
+    printf("  -D, --debug=LEVEL  Set debug level (0-3)\n");
+    printf("  -l, --log=FILE     Log file path\n");
     printf("  -t, --timeout=SEC  Sync timeout in seconds (default: %d)\n", SYNC_INTERVAL_SECONDS);
-    printf("  -4, --ipv4-only    Use IPv4 only\n");
-    printf("  -6, --ipv6-only    Use IPv6 only\n");
+    printf("  -q, --quit         Quit after first sync (testing)\n");
+    printf("  -I, --interface=IF Use specific network interface\n");
+    printf("  -4, --ipv4-only    Use IPv4 only (default)\n");
     printf("  -u, --user=USER    Run as specified user\n");
     printf("  -p, --pid=FILE     PID file path (default: %s)\n", DEFAULT_PID_FILE);
     printf("\n");
@@ -125,17 +127,19 @@ static int parse_arguments(int argc, char *argv[]) {
     int i = 1;
     while (i < argc) {
         char *arg = argv[i];
-        
-        /* Help and version - handled before but also check here */
+
+        /* Help and version */
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             print_usage(argv[0]);
             exit(EXIT_SUCCESS);
         }
-        if (strcmp(arg, "-v") == 0 || strcmp(arg, "--version") == 0) {
+        if (strcmp(arg, "-v") == 0 || strcmp(arg, "--version") == 0 ||
+            strcmp(arg, "-V") == 0 || strcmp(arg, "--verbose") == 0) {
             print_version();
             exit(EXIT_SUCCESS);
         }
-        
+
+        /* Config file */
         if (strcmp(arg, "-c") == 0 || strcmp(arg, "--config") == 0) {
             if (i + 1 < argc) {
                 g_cli.config_file = argv[++i];
@@ -145,8 +149,7 @@ static int parse_arguments(int argc, char *argv[]) {
                 fprintf(stderr, "Error: -c requires config file path\n");
                 return -1;
             }
-        }
-        if (strncmp(arg, "--config=", 9) == 0) {
+        } else if (strncmp(arg, "--config=", 9) == 0) {
             g_cli.config_file = arg + 9;
         }
         else if (strcmp(arg, "-f") == 0 || strcmp(arg, "--foreground") == 0) {
@@ -191,13 +194,16 @@ static int parse_arguments(int argc, char *argv[]) {
             g_cli.timeout_sec = atoi(arg + 10);
             if (g_cli.timeout_sec <= 0) g_cli.timeout_sec = SYNC_INTERVAL_SECONDS;
         }
-        else if (strcmp(arg, "-4") == 0 || strcmp(arg, "--ipv4-only") == 0) {
-            g_cli.ipv4_only = 1;
-            g_cli.ipv6_only = 0;
+        else if (strcmp(arg, "-I") == 0 || strcmp(arg, "--interface") == 0) {
+            if (i + 1 < argc) {
+                g_cli.interface = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -I requires interface name\n");
+                return -1;
+            }
         }
-        else if (strcmp(arg, "-6") == 0 || strcmp(arg, "--ipv6-only") == 0) {
-            g_cli.ipv6_only = 1;
-            g_cli.ipv4_only = 0;
+        else if (strncmp(arg, "--interface=", 12) == 0) {
+            g_cli.interface = arg + 12;
         }
         else if (strcmp(arg, "-u") == 0 || strcmp(arg, "--user") == 0) {
             if (i + 1 < argc) {
@@ -220,6 +226,10 @@ static int parse_arguments(int argc, char *argv[]) {
         }
         else if (strncmp(arg, "--pid=", 6) == 0) {
             g_cli.pid_file = arg + 6;
+        }
+        else if (strcmp(arg, "-q") == 0 || strcmp(arg, "--quit") == 0) {
+            /* Quit after first sync - useful for testing */
+            g_cli.quit_after_sync = 1;
         }
         else {
             fprintf(stderr, "Unknown option: %s\n", arg);
@@ -1578,6 +1588,12 @@ int main(int argc, char *argv[]) {
 
         int sync_interval = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
         sleep((unsigned int)sync_interval);
+
+        /* Quit after first sync (testing mode) */
+        if (g_cli.quit_after_sync) {
+            syslog(LOG_NOTICE, "Quit after sync mode - exiting.");
+            break;
+        }
     }
 
     /* Очистка ресурсов (через atexit) */

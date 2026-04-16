@@ -68,3 +68,18 @@
 ### 14. ntpq protocol - ПРОПУЩЕНО
 - Слишком complex для базовой реализации
 - Оставлено на будущее
+
+### 15. CLI Arguments
+- [x] -h/--help
+- [x] -v/--version  
+- [x] -c/--config
+- [x] -f/--foreground
+- [x] -d/--debug
+- [x] -D/--debug=LEVEL
+- [x] -l/--log
+- [x] -n/--no-daemonize
+- [x] -t/--timeout
+- [x] -4/--ipv4-only
+- [x] -6/--ipv6-only
+- [x] -u/--user
+- [x] -p/--pid
