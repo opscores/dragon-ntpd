@@ -1443,6 +1443,13 @@ static int sync_ntp_time(const char *ip, const char *port) {
 void cleanup_resources(void) {
     syslog(LOG_INFO, "Очистка ресурсов...");
 
+    /* Удалить PID файл при выходе */
+    if (g_cli.pid_file != NULL) {
+        if (unlink(g_cli.pid_file) == 0) {
+            syslog(LOG_INFO, "PID файл удалён: %s", g_cli.pid_file);
+        }
+    }
+
     /* Закрытие сокетов */
     if (g_server_count > 0 && g_servers != NULL) {
         for (int i = 0; i < g_server_count; i++) {
@@ -1531,6 +1538,18 @@ int main(int argc, char *argv[]) {
     if (!g_cli.foreground && !g_cli.no_daemonize) {
         setsid();
         umask(0);
+
+        /* Записать PID файл */
+        if (g_cli.pid_file != NULL) {
+            FILE *pid_fp = fopen(g_cli.pid_file, "w");
+            if (pid_fp != NULL) {
+                fprintf(pid_fp, "%d\n", (int)getpid());
+                fclose(pid_fp);
+                syslog(LOG_INFO, "PID файл записан: %s (PID=%d)", g_cli.pid_file, (int)getpid());
+            } else {
+                syslog(LOG_WARNING, "Не удалось записать PID файл: %s: %s", g_cli.pid_file, strerror(errno));
+            }
+        }
     }
 
     /* Загрузка конфигурации */
