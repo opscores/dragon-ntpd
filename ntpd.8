@@ -1,0 +1,255 @@
+.TH NTPD 8 "April 2026" "ntpd v1.0" "User Commands"
+.SH NAME
+ntpd \- Network Time Protocol daemon (NTPv4 server)
+.SH SYNOPSIS
+.B ntpd
+[\fIOPTIONS\fR]
+.br
+.B ntpd
+\-h
+.br
+.B ntpd
+\-v
+.br
+.B ntpd
+\-c
+\fIconfig\fR
+.SH DESCRIPTION
+.B ntpd
+is a Network Time Protocol (NTP) version 4 server implementation in C.
+It synchronizes the system clock with external NTP servers and provides
+time services to NTP clients.
+.P
+This implementation follows RFC 5905 and related specifications for NTPv4.
+.SH OPTIONS
+.TP
+.BI \-c " file"
+Specify configuration file (default: /etc/time_sync/servers.conf)
+.TP
+.BI \-p " port"
+Bind to specific port (default: 123)
+.TP
+.BI \-i " interval"
+Set synchronization interval in seconds (default: 30)
+.TP
+.BI \-s " servers"
+Specify NTP servers (comma-separated list)
+.TP
+.BI \-d " debug"
+Enable debug logging level
+.TP
+.BI \-f " foreground"
+Run in foreground (don't daemonize)
+.TP
+.BI \-h
+Display help message and exit
+.TP
+.BI \-v
+Display version information and exit
+.SH CONFIGURATION FILE FORMAT
+The configuration file should contain one NTP server per line:
+.IP
+\fIserver_name\fR:\fIport\fR
+.PP
+Example:
+.RS
+.nf
+pool.ntp.org:123
+time.google.com:123
+pool.ntp.org:123
+.RS
+.RE
+.PP
+Supported formats:
+.IP
+\fIhostname\fR:\fIport\fR \- Connect to NTP server by hostname
+.IP
+\fIIP_address\fR:\fIport\fR \- Connect to NTP server by IP address
+.IP
+\fIIP_address\fR \- Connect to NTP server on default port (123)
+.SH NTP PACKET FORMAT
+The NTP protocol uses a 48-byte packet format (plus optional extensions):
+.IP
+Line 1: LI, VN, Mode (byte 0)
+.IP
+Line 2: Stratum (byte 1)
+.IP
+Line 3: Poll (bytes 2-3)
+.IP
+Line 4: Precision (byte 4)
+.IP
+Line 5: Reserved (byte 5)
+.IP
+Line 6: Root delay (bytes 6-9)
+.IP
+Line 7: Root dispersion (bytes 10-13)
+.IP
+Line 8: Reference ID (bytes 14-17)
+.IP
+Line 9: Reference timestamp (bytes 18-25)
+.IP
+Line 10: Originate timestamp (bytes 26-33)
+.IP
+Line 11: Receive timestamp (bytes 34-41)
+.IP
+Line 12: Transmit timestamp (bytes 42-49)
+.SH TIMESTAMP FORMAT
+NTP uses a 64-bit timestamp with the following structure:
+.IP
+Seconds since 1900-01-01T00:00:00 UTC (32 bits)
+.IP
+Fractional seconds (32 bits, 2^-32 precision)
+.PP
+The epoch is January 1, 1900, which is 2208988800 seconds before
+the Unix epoch (January 1, 1970).
+.SH LEAP INDICATOR
+The Leap Indicator (LI) field indicates special conditions:
+.IP 0
+No warning
+.IP 1
+Last 16 minutes of month
+.IP 2
+Last 8 minutes of month
+.IP 3
+Last 4 minutes of month
+.SH MODE FIELD
+The Mode field indicates the type of NTP message:
+.IP 1
+Symmetric active
+.IP 2
+Symmetric passive
+.IP 3
+Client
+.IP 4
+Server
+.IP 5
+Broadcast
+.IP 6
+Control
+.SH STRATUM
+The Stratum field indicates the distance from the reference clock:
+.IP 0
+Special (reference clock)
+.IP 1-15
+Stratum level
+.IP 16
+Unsynchronized
+.SH DELAY AND OFFSET CALCULATION
+The following formulas are used for calculating delay and offset:
+.IP
+\fIdelay\fR = (T4 - T1) - (T3 - T2)
+.IP
+\fIoffset\fR = ½[(T2 - T1) + (T3 - T4)]
+.PP
+Where:
+.IP
+T1 = Originate Timestamp (client sends request)
+.IP
+T2 = Receive Timestamp (server receives request)
+.IP
+T3 = Transmit Timestamp (server sends response)
+.IP
+T4 = Destination Timestamp (client receives response)
+.SH MARX FILTER
+The Marx filter is used for outlier rejection:
+.IP
+\fithreshold\fR = median + k * MAD
+.PP
+Samples where \fI|delay - median| > threshold\fR are rejected.
+.SH EXIT STATUS
+.TP
+0
+Success
+.TP
+1
+Configuration error
+.TP
+2
+Socket binding error
+.TP
+3
+Server synchronization error
+.SH SIGNALS
+.TP
+SIGHUP
+Reload configuration without restarting
+.TP
+SIGTERM
+Graceful shutdown
+.TP
+SIGINT
+Interrupt (graceful shutdown)
+.SH EXAMPLES
+.RS
+.IP \(bu 2
+Run as daemon with default configuration:
+.RS
+.nf
+ntpd
+.fi
+.RE
+.IP \(bu 2
+Run in foreground for debugging:
+.RS
+.nf
+ntpd -f
+.fi
+.RE
+.IP \(bu 2
+Run with custom configuration:
+.RS
+.nf
+ntpd -c /etc/ntpd.conf
+.fi
+.RE
+.IP \(bu 2
+Run with specific port:
+.RS
+.nf
+ntpd -p 1234
+.fi
+.RE
+.RE
+.SH FILES
+.TP
+.B /etc/time_sync/servers.conf
+Default configuration file containing NTP server list
+.TP
+.B /var/log/syslog
+System log containing ntpd messages
+.TP
+.B /var/run/ntpd.pid
+Process ID file (when running as daemon)
+.SH SEE ALSO
+.BR ntpdate (8),
+.BR chronyd (8),
+.BR date (1)
+.SH RFC REFERENCES
+.RS
+.IP \(bu 2
+RFC 5905 - NTPv4 for IPv4/IPv6
+.IP \(bu 2
+RFC 5906 - NTPv4 for IPv4-mapped IPv6 addresses
+.IP \(bu 2
+RFC 5907 - NTPv4 System State Monitoring
+.IP \(bu 2
+RFC 5908 - NTPv4 Cryptographic Authentication
+.IP \(bu 2
+RFC 7314 - NTPv4 Cryptographic Authentication (update)
+.IP \(bu 2
+RFC 7315 - NTPv4 Packet Filtering
+.IP \(bu 2
+RFC 7316 - NTPv4 System State Monitoring (update)
+.IP \(bu 2
+RFC 7317-7320 - NTPv4 HMAC Authentication
+.IP \(bu 2
+RFC 7321 - NTPv4 Packet Format (update)
+.RE
+.SH AUTHOR
+NTPD v1.0 - NTP Server Implementation in C
+.SH LICENSE
+MIT License
+.SH BUGS
+Report bugs to the project maintainer.
+.SH COPYRIGHT
+Copyright (c) 2026. MIT License.

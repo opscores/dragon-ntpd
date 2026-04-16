@@ -739,8 +739,19 @@ static void handle_client_request(const void *buffer, size_t size,
     uint8_t mode = (uint8_t)(pkt.li_vn_mode & NTP_MODE_MASK);
 
     /* RFC 5905 Section 3: проверяем mode */
-    if (mode != 3) {
-        syslog(LOG_WARNING, "Не client mode пакет (mode=%u) от %s:%s", mode, ip, port);
+    uint8_t response_mode = 4;  /* default: server mode */
+    if (mode == 1 || mode == 2) {
+        /* Symmetric mode: respond with mode 2 (symmetric passive) */
+        response_mode = 2;
+        syslog(LOG_INFO, "Symmetric mode %d от %s:%s", mode, ip, port);
+    } else if (mode == 3) {
+        /* Client mode: respond with mode 4 (server) */
+        response_mode = 4;
+    } else if (mode == 5) {
+        /* Broadcast mode: don't respond, just accept */
+        syslog(LOG_INFO, "Broadcast request от %s:%s", ip, port);
+    } else {
+        syslog(LOG_WARNING, "Неизвестный mode %u от %s:%s", mode, ip, port);
         return;
     }
 
@@ -804,10 +815,10 @@ static void handle_client_request(const void *buffer, size_t size,
         out_root_disp = 0;
     }
 
-    /* LI = out_li, VN=4, Mode=4 (server) */
+    /* LI = out_li, VN=4, Mode=response_mode */
     response[0] = (uint8_t)((uint8_t)((out_li & 0x03u) << NTP_LI_SHIFT) |
                             (uint8_t)((uint8_t)NTP_VN_4 << NTP_VN_SHIFT) |
-                            (uint8_t)4u);
+                            (uint8_t)response_mode);
 
     response[1] = out_stratum;
     response[2] = (uint8_t)pkt.poll;         /* echo client poll */
