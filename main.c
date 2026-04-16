@@ -244,11 +244,6 @@ int main(int argc, char *argv[]) {
             g_server_count, sync_interval_1);
     syslog(LOG_NOTICE, "=====================================================================");
 
-    int listen_sock = create_udp_socket(NTP_PORT);
-    if (listen_sock < 0) {
-        syslog(LOG_WARNING, "Не удалось создать сокет для входящих запросов");
-    }
-
     /* Запуск потока коррекции часов (RFC 5905 Section 5) */
     if (start_clock_thread(sync_interval_1) != 0) {
         syslog(LOG_CRIT, "Не удалось запустить поток коррекции часов");
@@ -256,26 +251,21 @@ int main(int argc, char *argv[]) {
         syslog(LOG_INFO, "Поток коррекции часов запущен (интервал %d сек)", sync_interval_1);
     }
 
+    /* Запуск потока обработки пэеров (RFC 5905 Section 5) */
+    int peer_sock = create_udp_socket(NTP_PORT);
+    if (peer_sock >= 0) {
+        if (start_peer_thread(peer_sock, "0.0.0.0", "123", NULL) != 0) {
+            syslog(LOG_CRIT, "Не удалось запустить поток обработки пэеров");
+            close_socket(peer_sock);
+        } else {
+            syslog(LOG_INFO, "Поток обработки пэеров запущен (сокет %d)", peer_sock);
+        }
+    } else {
+        syslog(LOG_WARNING, "Не удалось создать сокет для потока пэеров");
+    }
+
     while (1) {
         syslog(LOG_INFO, "--- Начинается цикл синхронизации времени ---");
-
-        if (listen_sock >= 0) {
-            char listen_buffer[BUFFER_SIZE];
-            struct sockaddr_in client_addr;
-            socklen_t client_len = sizeof(client_addr);
-
-            ssize_t listen_recv_len = recvfrom(listen_sock, listen_buffer, sizeof(listen_buffer), 0,
-                                        (struct sockaddr *)&client_addr, &client_len);
-            if (listen_recv_len > 0) {
-                char client_ip[INET_ADDRSTRLEN];
-                if (inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip)) == NULL) {
-                    strcpy(client_ip, "unknown");
-                }
-                char port_str[6];
-                (void)snprintf(port_str, sizeof(port_str), "%u", (unsigned)ntohs(client_addr.sin_port));
-                handle_client_request(listen_buffer, (size_t)listen_recv_len, client_ip, port_str);
-            }
-        }
 
         bool all_success = true;
         for (int i = 0; i < g_server_count; i++) {
