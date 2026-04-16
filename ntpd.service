@@ -1,0 +1,36 @@
+[Unit]
+Description=NTP Server - Network Time Protocol Daemon
+Documentation=https://www.ntp.org/
+After=network.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/drakon/Development/C/ntpd/ntpd
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ntpd
+
+# NTP требует привязки к порту 123
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Ограничения безопасности
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/home/drakon/Development/C/ntpd
+
+# Рабочая директория
+WorkingDirectory=/home/drakon/Development/C/ntpd
+
+# Ограничения ресурсов
+LimitNOFILE=1024
+LimitNPROC=64
+
+[Install]
+WantedBy=multi-user.target

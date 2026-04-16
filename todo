@@ -1,0 +1,80 @@
+# NTP Server - TODO по исправлению соответствия RFC 5905
+
+## ✅ СООТВЕТСТВУЕТ (не требует изменений)
+
+- [x] Формат NTP-пакета (48 байт, big-endian)
+- [x] LI/VN/Mode в первом байте
+- [x] Все timestamp'ы по 8 байт
+- [x] Leap Indicator (значения 0-3)
+- [x] Стратификация (peer_stratum + 1, 16 = unsynced)
+- [x] On-wire формулы задержки и смещения
+- [x] Kiss-o'-Death detection
+- [x] VN=4
+
+## ⚠️ ЧАСТИЧНОЕ СООТВЕТСТВИЕ - исправить
+
+### 1. Precision field (строка 349, 671)
+- [ ] Вычислять динамически на основе clock_getres() или константы
+- Текущее: фиксированное -20 (~1 мкс)
+- Должно быть: реальная точность системы
+
+### 2. Poll field (строка 348, 670)
+- [ ] Динамическое Adjusting poll interval согласно RFC 5905 Section 13
+- Текущее: фиксированное 4 (16 секунд)
+- Должно меняться в зависимости от условий сети
+
+### 3. Root Dispersion (строки 1004-1008)
+- [ ] Dispersion должна расти со временем (PHI = 15 ppm)
+- Текущее: abs(offset) + jitter
+- Должно накапливаться со скоростью PHI * time
+
+### 4. Poll/Select Algorithm (RFC 5905 Section 10, 11.2.1)
+- [ ] Реализовать Byzantine fault detection (truechimer/falseticker)
+- [ ] Реализовать Cluster algorithm (RFC 5905 Section 11.2.2)
+- [ ] Реализовать Combine algorithm (RFC 5905 Section 11.2.3)
+
+### 5. Clock Discipline Algorithm (RFC 5905 Section 11.3)
+- [ ] Полноценный VFO (Variable Frequency Oscillator)
+- [ ] Добавить интегральную компоненту (I-регулятор)
+- [ ] Изменить threshold с 128ms на 0.5s согласно RFC
+
+## ❌ НЕ СООТВЕТСТВУЕТ - исправить
+
+### 6. Reference Timestamp в ответе (строка 1002)
+- [ ] Сохранять время последней успешной синхронизации
+- Текущее: g_local_ref_ts = ntp_timestamp_now() - НЕПРАВИЛЬНО
+- Должно быть: время последнего successful sync
+
+### 7. Проверка mode входящего пакета
+- [ ] Добавить проверку VN при ответе сервера
+- [ ] Обрабатывать KoD пакеты правильно
+
+### 8. Precision в ответе
+- [ ] Вычислять реальную precision системы
+- [ ] Использовать при ответе клиентам
+
+## 🔄 ДОПОЛНИТЕЛЬНЫЕ улучшения
+
+### 9. Режимы работы (RFC 5905 Section 3)
+- [ ] Добавить поддержку symmetric mode (1, 2)
+- [ ] Добавить поддержку broadcast mode (5, 6)
+
+### 10. IPv6 поддержка
+- [ ] Добавить AF_INET6 в getaddrinfo
+- [ ] Обрабатывать IPv6 адреса
+
+### 11. Extension Fields (RFC 5905 Section 7.5)
+- [ ] Парсинг extension fields (опционально)
+- [ ] MAC support (опционально, для безопасности)
+
+### 12. Архитектура
+- [ ] Перейти на multi-threaded модель (RFC 5905 Section 5)
+- [ ] Отдельные процессы: peer, poll, system, clock-discipline
+
+### 13. Оптимизация
+- [ ] Переиспользовать UDP сокет вместо создания нового
+- [ ] Обрабатывать ситуацию недоступности всех серверов
+
+### 14. Логирование и мониторинг
+- [ ] Добавить поддержку ntpq (NTP query protocol)
+- [ ] Добавить statistics и counters
