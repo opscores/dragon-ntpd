@@ -94,7 +94,28 @@ typedef struct {
     NtpTimestamp orig_ts;
     NtpTimestamp recv_ts;
     NtpTimestamp xmit_ts;
+    size_t extension_len;  /* длина extension fields (0 если нет) */
 } NtpPacket;
+
+/* RFC 5905 Section 7.5: парсинг extension fields */
+static int skip_extension_fields(const uint8_t *data, size_t size) {
+    if (size <= 48) return 0;
+    
+    size_t pos = 48;
+    while (pos + 4 <= size) {
+        uint16_t field_type = (uint16_t)((data[pos] << 8) | data[pos + 1]);
+        uint16_t field_len = (uint16_t)((data[pos + 2] << 8) | data[pos + 3]);
+        
+        if (field_len < 4) break;
+        if (pos + field_len > size) break;
+        
+        if (field_type == 0) break;
+        
+        pos += field_len;
+    }
+    
+    return (int)(pos - 48);
+}
 
 /* ============================================================================
  * УТИЛИТЫ ДЛЯ РАБОТЫ С ВРЕМЕНЕМ
@@ -420,7 +441,13 @@ static bool parse_ntp_packet(const void *buffer, size_t size, NtpPacket *pkt) {
         return false;
     }
 
+    /* Пропускаем extension fields (RFC 5905 Section 7.5) */
     const uint8_t *data = (const uint8_t *)buffer;
+    int ext_len = skip_extension_fields(data, size);
+    if (ext_len > 0) {
+        syslog(LOG_DEBUG, "Пропускаем extension fields: %d байт", ext_len);
+    }
+    (void)ext_len;
 
     pkt->li_vn_mode = data[0];
     pkt->stratum = data[1];
