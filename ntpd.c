@@ -1494,6 +1494,24 @@ int main(int argc, char *argv[]) {
         openlog("ntpd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
     }
 
+    /* Открыть log файл если указан */
+    if (g_cli.log_file != NULL) {
+        FILE *log_fp = fopen(g_cli.log_file, "a");
+        if (log_fp != NULL) {
+            /* Перенаправляем stderr в файл для daemon режима */
+            if (!g_cli.foreground && !g_cli.no_daemonize) {
+                int fd = fileno(log_fp);
+                if (fd >= 0) {
+                    dup2(fd, STDERR_FILENO);
+                    close(fd);
+                }
+            }
+            fprintf(stderr, "Log file opened: %s\n", g_cli.log_file);
+        } else {
+            syslog(LOG_WARNING, "Не удалось открыть log файл: %s: %s", g_cli.log_file, strerror(errno));
+        }
+    }
+
     g_local_precision = get_system_precision();
     syslog(LOG_INFO, "System precision: %d (2^%d = %.3f сек)", 
             g_local_precision, g_local_precision, 
