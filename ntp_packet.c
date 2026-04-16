@@ -49,8 +49,37 @@ void write_u32be(uint8_t *p, uint32_t v) {
  */
 
 /**
+ * Validate extension field length according to RFC 5905
+ *
+ * @param length Field length
+ * @param remaining Remaining bytes in packet
+ * @return 0 on valid, -1 on error
+ */
+static int validate_extension_field_length(uint16_t length, size_t remaining) {
+    /* RFC 5905: Length field bottom 2 bits should be zero (4-byte alignment) */
+    if (length & 0x03) {
+        syslog(LOG_WARNING, "Extension field length not aligned to 4 bytes: %u", length);
+        return -1;
+    }
+
+    /* Check maximum size (65,532 octets due to 16-bit Length field) */
+    if (length > 65532) {
+        syslog(LOG_WARNING, "Extension field length exceeds maximum: %u", length);
+        return -1;
+    }
+
+    /* Check bounds */
+    if ((size_t)(48 + length) > remaining) {
+        syslog(LOG_WARNING, "Extension field exceeds packet bounds");
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
  * Parse extension field header
- * 
+ *
  * @param data Pointer to packet data (after 48-byte header)
  * @param pos Current position in packet
  * @param type Pointer to store field type
@@ -78,15 +107,48 @@ static int parse_extension_field_header(const uint8_t *data, size_t pos,
 }
 
 /**
+ * Process NTS Unique Identifier extension field (RFC 8915)
+ *
+ * @param data Pointer to field data
+ * @param len Field length
+ */
+static void process_nts_uid(const uint8_t *data __attribute__((unused)), size_t len __attribute__((unused))) {
+    syslog(LOG_DEBUG, "Processing NTS Unique Identifier field");
+    /* RFC 8915: Store UID for future authentication */
+}
+
+/**
+ * Process NTS Cookie extension field (RFC 8915)
+ *
+ * @param data Pointer to field data
+ * @param len Field length
+ */
+static void process_nts_cookie(const uint8_t *data __attribute__((unused)), size_t len __attribute__((unused))) {
+    syslog(LOG_DEBUG, "Processing NTS Cookie field");
+    /* RFC 8915: Store cookie for authentication */
+}
+
+/**
+ * Process NTS AEEF extension field (RFC 8915)
+ *
+ * @param data Pointer to field data
+ * @param len Field length
+ */
+static void process_nts_aeef(const uint8_t *data __attribute__((unused)), size_t len __attribute__((unused))) {
+    syslog(LOG_DEBUG, "Processing NTS AEEF field");
+    /* RFC 8915: Process authenticated extension field */
+}
+
+/**
  * Log extension field with detailed information
- * 
+ *
  * @param type Field type
  * @param length Field length
  * @param pos Position in packet
  */
 static void log_extension_field(uint16_t type, uint16_t length, size_t pos) {
     const char *type_str = "Unknown";
-    
+
     switch (type) {
         case NTP_EF_CRYPTO_NAK:
             type_str = "Crypto-NAK (Authentication Failure)";
@@ -140,14 +202,14 @@ static void log_extension_field(uint16_t type, uint16_t length, size_t pos) {
 
 /**
  * Skip extension fields in NTP packet (RFC 5905 Section 2.1)
- * 
+ *
  * Extension fields are located after the 48-byte NTP header.
  * They are used for:
  * - Kiss-o'-Death marker (RFC 5905 Section 8.3)
  * - I-DO capability negotiation (RFC 5905 Section 8.4)
  * - NTS security extensions (RFC 8915)
  * - Legacy MAC authentication
- * 
+ *
  * @param data Pointer to packet data
  * @param size Total packet size
  * @return Number of bytes skipped (extension fields), or 0 if none
@@ -164,6 +226,13 @@ static int skip_extension_fields(const uint8_t *data, size_t size) {
 
         int ret = parse_extension_field_header(data, pos, &field_type, &field_len);
         if (ret < 0) break;
+
+        /* Validate extension field length (RFC 5905) */
+        ret = validate_extension_field_length(field_len, size - 48);
+        if (ret < 0) {
+            syslog(LOG_WARNING, "Invalid extension field length at offset %zu", pos);
+            break;
+        }
 
         /* LAST-EF marker: no more extension fields follow */
         if (field_type == NTP_EF_LAST_EF) {
@@ -189,6 +258,20 @@ static int skip_extension_fields(const uint8_t *data, size_t size) {
         /* NTS extension fields (RFC 8915) */
         if (field_type >= NTP_EF_NTS_UID_REQ && field_type <= NTP_EF_NTS_AEEF_RESP) {
             syslog(LOG_DEBUG, "NTS extension field detected at offset %zu", pos);
+            
+            /* Process NTS UID Request/Response */
+            if (field_type == NTP_EF_NTS_UID_REQ || field_type == NTP_EF_NTS_UID_RESP) {
+                process_nts_uid(data + 4, field_len - 4);
+            }
+            /* Process NTS Cookie */
+            else if (field_type == NTP_EF_NTS_COOKIE) {
+                process_nts_cookie(data + 4, field_len - 4);
+            }
+            /* Process NTS AEEF */
+            else if (field_type == NTP_EF_NTS_AEEF_REQ || field_type == NTP_EF_NTS_AEEF_RESP) {
+                process_nts_aeef(data + 4, field_len - 4);
+            }
+            
             pos += field_len;
             skipped += field_len;
             continue;
@@ -246,6 +329,12 @@ bool parse_ntp_packet(const void *buffer, size_t size, NtpPacket *pkt) {
     int ext_len = skip_extension_fields(data, size);
     if (ext_len > 0) {
         syslog(LOG_DEBUG, "Пропускаем extension fields: %d байт", ext_len);
+    }
+
+    /* Check for KOD in header (RFC 5905 Section 8.3) */
+    if (ntp_is_kod(pkt)) {
+        syslog(LOG_WARNING, "Kiss-o'-Death marker detected in packet header");
+        return false;
     }
 
     /* Парсинг только основных 48 байт, игнорируя extension fields */
@@ -317,5 +406,9 @@ void create_ntp_request(void *buffer, NtpTimestamp *xmit_out) {
 
 bool ntp_is_kod(const NtpPacket *pkt) {
     if (pkt == NULL) return false;
-    return pkt->stratum == 0 && pkt->ref_ts.sec == 0 && pkt->ref_ts.frac == 0;
+    
+    /* RFC 5905 Section 8.3: KOD in header
+     * stratum=127 (0x7F) and leap=3 indicates KOD */
+    uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
+    return pkt->stratum == 127 && li == 3;
 }
