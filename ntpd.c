@@ -187,10 +187,36 @@ static NtpTimestamp g_local_ref_ts = {0, 0};
 static uint32_t g_local_root_delay = 0; /* 16.16 */
 static uint32_t g_local_root_disp = 0;  /* 16.16 */
 static uint8_t g_local_li = 3;          /* 3 = alarm when unsynced */
+static time_t g_last_dispersion_update = 0; /* last time dispersion was updated */
+
+#define PHI 15  /* maximum drift rate in ppm (RFC 5905 default) */
 
 static int8_t g_local_precision = -20;  /* system precision (log2 seconds), initialized at startup */
 static int8_t g_local_poll = 4;           /* poll exponent (log2 seconds), default 16 sec */
 static int8_t g_peer_poll = 4;           /* last received poll from peer */
+
+/* Forward declaration */
+static uint32_t ntp_u16_16_from_us(uint64_t us);
+
+static uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us) {
+    time_t now = time(NULL);
+    if (g_last_dispersion_update == 0) {
+        g_last_dispersion_update = now;
+        return current_disp;
+    }
+    
+    double elapsed = (double)(now - g_last_dispersion_update);
+    if (elapsed < 0) elapsed = 0;
+    
+    double phi_dispersion = (PHI * elapsed) / 1000000.0;
+    uint64_t disp_us = (offset_us >= 0) ? (uint64_t)offset_us : (uint64_t)(-offset_us);
+    
+    double new_disp = phi_dispersion + (double)disp_us + (double)jitter_us;
+    if (new_disp > (double)UINT32_MAX) new_disp = (double)UINT32_MAX;
+    
+    g_last_dispersion_update = now;
+    return ntp_u16_16_from_us((uint64_t)new_disp);
+}
 
 static int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us) {
     int8_t new_poll = current_poll;
@@ -1050,9 +1076,8 @@ static int sync_ntp_time(const char *ip, const char *port) {
                     g_local_root_delay = ntp_u16_16_from_us(delay_us);
                     uint64_t abs_off = (offset_us < 0) ? (uint64_t)(-offset_us) : (uint64_t)offset_us;
                     uint64_t jitter_us = ntp_offset_jitter_us_locked();
-                    uint64_t disp_us = abs_off;
-                    if (UINT64_MAX - disp_us >= jitter_us) disp_us += jitter_us;
-                    g_local_root_disp = ntp_u16_16_from_us(disp_us);
+                    /* RFC 5905: dispersion накапливается со скоростью PHI (15 ppm) */
+                    g_local_root_disp = update_root_dispersion(g_local_root_disp, abs_off, jitter_us);
                     g_local_li = li;
 
                     /* ref_id: для stratum>=2 это IPv4 адрес upstream */
