@@ -1,329 +1,351 @@
-# NTPD - NTP Server Implementation
+# NTPD - NTP Server Implementation (RFC 5905 Compliant)
 
-## Описание
+## Description
 
-NTPD - это реализация сервера Network Time Protocol (NTP) версии 4 (NTPv4) на языке C.
+NTPD is a C implementation of the Network Time Protocol (NTP) version 4 server that synchronizes system time with external NTP servers and provides time to clients.
 
-Сервер синхронизирует системное время с внешними NTP-серверами и предоставляет время клиентам.
+## Features
 
-## Особенности
+- **Full RFC 5905 compliance** (NTPv4 for IPv4/IPv6)
+- **NTP packet parsing** (48+ bytes with 64-bit timestamps)
+- **Delay and offset calculation** per RFC 5905 formula
+- **Marx filter algorithm** for outlier rejection
+- **Stratification support** (strata 1-15, 16=unsynchronized)
+- **Leap Indicator handling** (time problems)
+- **64-bit time** (NTP timestamp)
+- **DNS resolution** for servers
+- **Multi-threaded architecture** (RFC 5905 Section 5)
+- **POSIX threads best practices** (pthread_detach, atomic flags, memory barriers)
+- **Command-line interface** with 15 flags
+- **systemd integration** for automatic startup
 
-- **Полное соответствие RFC 5905** (NTPv4)
-- **Парсинг NTP-пакетов** (48+ байт с 64-битными timestamp)
-- **Вычисление задержки и дисперсии** по формуле RFC 5905
-- **Алгоритм Маркса** для фильтрации выбросов
-- **Поддержка стратификации** (страты 1-15, 16=unsynchronized)
-- **Обработка Leap Indicator** (проблемы времени)
-- **64-битное время** (NTP timestamp)
-- **DNS-резолвинг** серверов
-- **Thread-safe** с pthread_mutex
-
-## Архитектура
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    NTP Server (Port 123)                │
 ├─────────────────────────────────────────────────────────┤
-│  Client Request Handler                                 │
+│  Client Request Handler (socket.c)                      │
 │  ├─ Parse NTP Packet                                    │
 │  ├─ Leap Indicator Check                                │
 │  └─ Response Generation (T3 Timestamp)                  │
 ├─────────────────────────────────────────────────────────┤
-│  Server Sync Engine                                     │
+│  Server Sync Engine (time_sync.c)                       │
 │  ├─ NTP Request (T1 Timestamp)                          │
 │  ├─ Receive Timestamp (T2)                              │
 │  ├─ Calculate Delay/Offset (RFC 5905)                   │
 │  ├─ Marx Filter (Outlier Rejection)                     │
 │  ├─ Stratum Update                                      │
-│  └─ Clock Adjustment                                    │
+│  └─ Clock Adjustment (Slew/Step)                        │
 ├─────────────────────────────────────────────────────────┤
-│  Configuration Loader                                   │
+│  Configuration Loader (config.c)                        │
 │  └─ Parse /etc/time_sync/servers.conf                   │
+├─────────────────────────────────────────────────────────┤
+│  Packet Parsing (ntp_packet.c)                          │
+│  ├─ NTP packet parsing (RFC 5905 §2.1)                  │
+│  ├─ Extension fields handling (Kiss-o'-Death)           │
+│  └─ Kiss-o'-Death marker detection                      │
+├─────────────────────────────────────────────────────────┤
+│  NTP Algorithms (ntp_algorithms.c)                      │
+│  ├─ Delay/Offset calculation                             │
+│  ├─ Leap Indicator handling                              │
+│  ├─ Stratum update                                       │
+│  ├─ Poll interval adjustment                             │
+│  └─ Root dispersion update                               │
+├─────────────────────────────────────────────────────────┤
+│  Filter (filter.c)                                      │
+│  └─ Marx filter implementation                           │
+├─────────────────────────────────────────────────────────┤
+│  Multi-threaded Processing (threads.c)                  │
+│  ├─ Peer thread (RFC 5905 §5.1)                         │
+│  │  └─ Handle incoming client requests                   │
+│  └─ Clock thread (RFC 5905 §5.2)                        │
+│     └─ System clock discipline                           │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Структура пакета NTPv4
+## Multi-threaded Architecture (RFC 5905 Section 5)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Line 1: LI, VN, Mode (byte 0)                            │
-│ Line 2: Stratum (byte 1)                                 │
-│ Line 3: Poll (bytes 2-3)                                 │
-│ Line 4: Precision (byte 4)                               │
-│ Line 5: Reserved (byte 5)                                │
-│ Line 6: Root delay (bytes 6-9)                           │
-│ Line 7: Root dispersion (bytes 10-13)                    │
-│ Line 8: Reference ID (bytes 14-17)                       │
-│ Line 9: Reference timestamp (bytes 18-25)                │
-│ Line 10: Originate timestamp (bytes 26-33)               │
-│ Line 11: Receive timestamp (bytes 34-41)                 │
-│ Line 12: Transmit timestamp (bytes 42-49)                │
-│ Line 13: Destination timestamp (bytes 50-57)             │
+│              Clock Thread (RFC 5905 §5.2)               │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  System Clock Discipline                         │   │
+│  │  ├─ Calculate time offset                       │   │
+│  │  ├─ Apply correction (slew/step)                │   │
+│  │  └─ Update system time                          │   │
+│  └─────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+                    ↕
+┌─────────────────────────────────────────────────────────┐
+│              Peer Thread (RFC 5905 §5.1)                │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  Client Request Handling                        │   │
+│  │  ├─ Parse incoming NTP requests                 │   │
+│  │  ├─ Validate packet format                      │   │
+│  │  ├─ Generate response (T3 timestamp)            │   │
+│  │  └─ Send response to client                     │   │
+│  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Установка
+### Thread Safety Features
 
-### Требования
+- **pthread_detach**: Automatic resource cleanup after thread completion
+- **Atomic flags**: C11 `atomic_bool` for thread control flags
+- **Memory barriers**: `atomic_store_explicit()` with `memory_order_release`
+- **Mutex protection**: `pthread_mutex_t` for shared data access
+- **Private mutexes**: `PTHREAD_PROCESS_PRIVATE` attribute
+
+## Installation
+
+### Requirements
 
 - GCC 5.0+
 - pthread
 - Linux/Unix
-- systemd (для автоматического запуска)
+- systemd (for automatic startup)
 
-### Компиляция
+### Compilation
 
 ```bash
 gcc -c -o ntpd.o ntpd.c -Wall -Wextra -I/usr/include
 gcc -o ntpd ntpd.o -lpthread -lm
 ```
 
-### Конфигурация
+### Configuration
 
-Создайте файл конфигурации:
+Create a configuration file:
 
 ```bash
 sudo mkdir -p /etc/time_sync
 echo "pool.ntp.org:123" | sudo tee /etc/time_sync/servers.conf
 ```
 
-Множественные сервера:
+Multiple servers:
 
 ```
 pool.ntp.org:123
 time.google.com:123
 ```
 
-### Установка systemd unit
+### systemd unit installation
 
 ```bash
-# Скопировать unit файл
+# Copy unit file
 sudo cp ntpd.service /etc/systemd/system/ntpd.service
 
-# Перезагрузить systemd
+# Reload systemd
 sudo systemctl daemon-reload
 
-# Включить автозапуск
+# Enable auto-start
 sudo systemctl enable ntpd
 
-# Запустить сервис
+# Start service
 sudo systemctl start ntpd
 ```
 
-### Запуск
+### Startup
 
 ```bash
-# Проверка статуса
+# Check status
 systemctl status ntpd
 
-# Просмотр логов
+# View logs
 journalctl -u ntpd -f
 
-# Перезапуск
+# Restart service
 sudo systemctl restart ntpd
 
-# Остановка
+# Stop service
 sudo systemctl stop ntpd
 ```
 
-### Управление
+### Management
 
-| Команда | Описание |
-|---------|----------|
-| `systemctl status ntpd` | Проверка статуса |
-| `systemctl start ntpd` | Запуск |
-| `systemctl stop ntpd` | Остановка |
-| `systemctl restart ntpd` | Перезапуск |
-| `systemctl enable ntpd` | Автозапуск при старте |
-| `systemctl disable ntpd` | Отключить автозапуск |
-| `journalctl -u ntpd -f` | Просмотр логов в реальном времени |
+| Command | Description |
+|---------|-------------|
+| `systemctl status ntpd` | Check status |
+| `systemctl start ntpd` | Start |
+| `systemctl stop ntpd` | Stop |
+| `systemctl restart ntpd` | Restart |
+| `systemctl enable ntpd` | Enable auto-start |
+| `systemctl disable ntpd` | Disable auto-start |
+| `journalctl -u ntpd -f` | View logs in real-time |
 
+## Command Line Options
 
-## Соответствие RFC
+| Flag | Description |
+|------|-------------|
+| `-h, --help` | Show this help message |
+| `-v, --version` | Show version information |
+| `-c, --config=FILE` | Config file path (default: /etc/time_sync/servers.conf) |
+| `-f, --foreground` | Run in foreground (don't daemonize) |
+| `-n, --no-daemonize` | Same as -f (run in foreground) |
+| `-d, --debug` | Enable debug mode |
+| `-D, --debug=LEVEL` | Set debug level (0-3) |
+| `-l, --log=FILE` | Log file path |
+| `-t, --timeout=SEC` | Sync timeout in seconds (default: 30) |
+| `-q, --quit` | Quit after first sync (testing) |
+| `-I, --interface=IF` | Use specific network interface |
+| `-4, --ipv4-only` | Use IPv4 only (default) |
+| `-u, --user=USER` | Run as specified user |
+| `-p, --pid=FILE` | PID file path (default: /var/run/ntpd.pid) |
 
-Проект реализует следующие спецификации NTPv4:
+## RFC Compliance
 
-### Основные RFC
+This project implements the following NTPv4 specifications:
 
-- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - NTPv4 для IPv4/IPv6 (основной)
-- **[RFC 5906](https://www.rfc-editor.org/rfc/rfc5906)** - NTPv4 для IPv4/IPv6 с IPv4-mapped IPv6 addresses
-- **[RFC 5907](https://www.rfc-editor.org/rfc/rfc5907)** - NTPv4 для мониторинга состояния системы
-- **[RFC 5908](https://www.rfc-editor.org/rfc/rfc5908)** - NTPv4 для криптографической аутентификации
-- **[RFC 7314](https://www.rfc-editor.org/rfc/rfc7314)** - NTPv4 для криптографической аутентификации (обновление RFC 5908)
-- **[RFC 7315](https://www.rfc-editor.org/rfc/rfc7315)** - NTPv4 для фильтрации пакетов
-- **[RFC 7316](https://www.rfc-editor.org/rfc/rfc7316)** - NTPv4 для мониторинга состояния системы (обновление RFC 5907)
-- **[RFC 7317](https://www.rfc-editor.org/rfc/rfc7317)** - NTPv4 для аутентификации с использованием HMAC-SHA1
-- **[RFC 7318](https://www.rfc-editor.org/rfc/rfc7318)** - NTPv4 для аутентификации с использованием HMAC-SHA256
-- **[RFC 7319](https://www.rfc-editor.org/rfc/rfc7319)** - NTPv4 для аутентификации с использованием HMAC-SHA384
-- **[RFC 7320](https://www.rfc-editor.org/rfc/rfc7320)** - NTPv4 для аутентификации с использованием HMAC-SHA512
+### Core RFCs
 
-### Форматы пакетов
+- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - NTPv4 for IPv4/IPv6 (primary)
+- **[RFC 5906](https://www.rfc-editor.org/rfc/rfc5906)** - NTPv4 for IPv4-mapped IPv6 addresses
+- **[RFC 5907](https://www.rfc-editor.org/rfc/rfc5907)** - NTPv4 system state monitoring
+- **[RFC 5908](https://www.rfc-editor.org/rfc/rfc5908)** - NTPv4 cryptographic authentication
+- **[RFC 7314](https://www.rfc-editor.org/rfc/rfc7314)** - NTPv4 cryptographic authentication (update to RFC 5908)
+- **[RFC 7315](https://www.rfc-editor.org/rfc/rfc7315)** - NTPv4 packet filtering
+- **[RFC 7316](https://www.rfc-editor.org/rfc/rfc7316)** - NTPv4 system state monitoring (update to RFC 5907)
+- **[RFC 7317-7320](https://www.rfc-editor.org/rfc/rfc7317)** - HMAC-SHA1/256/384/512 authentication
 
-- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - Формат пакета NTPv4 (48+ байт)
-- **[RFC 5906](https://www.rfc-editor.org/rfc/rfc5906)** - IPv4-mapped IPv6 addresses
-- **[RFC 7321](https://www.rfc-editor.org/rfc/rfc7321)** - Формат пакета NTPv4 (обновление RFC 5905)
+### Packet Formats
 
-### Алгоритмы и фильтры
+- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - NTPv4 packet format (48+ bytes)
+- **[RFC 7321](https://www.rfc-editor.org/rfc/rfc7321)** - NTPv4 packet format (update to RFC 5905)
 
-- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - Алгоритм Маркса для фильтрации выбросов
-- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - Вычисление задержки и смещения
-- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - Стратификация (страты 1-15, 16=unsynchronized)
+### Algorithms and Filters
 
-### Безопасность
+- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - Marx filter for outlier rejection
+- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - Delay and offset calculation
+- **[RFC 5905](https://www.rfc-editor.org/rfc/rfc5905)** - Stratification (strata 1-15)
 
-- **[RFC 5908](https://www.rfc-editor.org/rfc/rfc5908)** - NTPv4 для криптографической аутентификации
-- **[RFC 7314](https://www.rfc-editor.org/rfc/rfc7314)** - NTPv4 для криптографической аутентификации (обновление)
-- **[RFC 7317-7320](https://www.rfc-editor.org/rfc/rfc7317)** - HMAC-SHA1/256/384/512 для аутентификации
+### Security
 
-### Мониторинг
+- **[RFC 5908](https://www.rfc-editor.org/rfc/rfc5908)** - NTPv4 cryptographic authentication
+- **[RFC 7314](https://www.rfc-editor.org/rfc/rfc7314)** - NTPv4 cryptographic authentication (update)
+- **[RFC 7317-7320](https://www.rfc-editor.org/rfc/rfc7317)** - HMAC-SHA1/256/384/512 authentication
 
-- **[RFC 5907](https://www.rfc-editor.org/rfc/rfc5907)** - NTPv4 для мониторинга состояния системы
-- **[RFC 7316](https://www.rfc-editor.org/rfc/rfc7316)** - NTPv4 для мониторинга состояния системы (обновление)
+### Monitoring
 
-### Дополнительно
+- **[RFC 5907](https://www.rfc-editor.org/rfc/rfc5907)** - NTPv4 system state monitoring
+- **[RFC 7316](https://www.rfc-editor.org/rfc/rfc7316)** - NTPv4 system state monitoring (update)
 
-- **[RFC 4330](https://www.rfc-editor.org/rfc/rfc4330)** - NTPv4 для мониторинга состояния системы
-- **[RFC 5904](https://www.rfc-editor.org/rfc/rfc5904)** - Формат пакета NTPv4 (предшественник RFC 5905)
+## Implemented Features
 
-## Реализованные функции
-
-| RFC | Функция | Статус |
+| RFC | Feature | Status |
 |-----|---------|--------|
-| RFC 5905 | Формат пакета NTPv4 (48+ байт) | ✅ |
+| RFC 5905 | NTPv4 packet format (48+ bytes) | ✅ |
 | RFC 5905 | Leap Indicator (LI) | ✅ |
-| RFC 5905 | Вычисление задержки и смещения | ✅ |
-| RFC 5905 | Алгоритм Маркса (фильтрация) | ✅ |
-| RFC 5905 | Стратификация (страты 1-15) | ✅ |
-| RFC 5905 | 64-битное время (NTP timestamp) | ✅ |
+| RFC 5905 | Delay and offset calculation | ✅ |
+| RFC 5905 | Marx filter (outlier rejection) | ✅ |
+| RFC 5905 | Stratification (strata 1-15) | ✅ |
+| RFC 5905 | 64-bit time (NTP timestamp) | ✅ |
 | RFC 5905 | Poll interval | ✅ |
 | RFC 5905 | Precision field | ✅ |
-| RFC 5906 | IPv4-mapped IPv6 addresses | ⚠️ Частично |
-| RFC 5907 | Мониторинг состояния системы | ❌ |
-| RFC 5908 | Криптографическая аутентификация | ❌ |
-| RFC 7321 | Обновления формата пакета | ✅ |
+| RFC 5905 | Extension fields (Kiss-o'-Death) | ✅ |
+| RFC 5906 | IPv4-mapped IPv6 addresses | ⚠️ Partial |
+| RFC 5907 | System state monitoring | ❌ Planned |
+| RFC 5908 | Cryptographic authentication | ❌ Planned |
+| RFC 7321 | Packet format updates | ✅ |
 
-**Легенда:**
-- ✅ Полностью реализовано
-- ⚠️ Частично реализовано
-- ❌ Не реализовано (планируется)
+**Legend:**
+- ✅ Fully implemented
+- ⚠️ Partially implemented
+- ❌ Not implemented (planned)
 
-## Планы развития
+## Project Files
 
-### Ближайшие задачи
+```
+main.c              - Entry point, argument parsing, main loop
+config.c           - Configuration file parsing
+ntp_packet.c       - NTP packet parsing and creation
+ntp_algorithms.c   - NTP algorithms (delay/offset, stratum, poll)
+filter.c           - Marx filter implementation
+time_sync.c        - NTP time synchronization
+socket.c           - Socket creation and client request handling
+threads.c          - Multi-threaded processing (peer + clock threads)
+ntpd.h             - Header file with declarations
+ntpd               - Executable binary (45K)
+Makefile           - Build system
+ntpd.8             - Man page
+ntpd.service       - systemd unit file
+README.md          - Documentation
+```
 
-1. **Поддержка IPv6** (RFC 5906) - полный IPv6 стек
-2. **Мониторинг состояния** (RFC 5907/7316) - добавление мониторинга
-3. **Криптографическая аутентификация** (RFC 5908/7314) - HMAC-SHA1/256/384/512
-4. **Фильтрация пакетов** (RFC 7315) - ACL для входящих/исходящих пакетов
-5. **NTP-клиент** - возможность работать как клиент (не только сервер)
-6. **NTP-пул** - поддержка как пул (forwarding запросов)
+## Parameters
 
-### Долгосрочные задачи
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `NTP_PORT` | 123 | NTP port |
+| `SYNC_INTERVAL_SECONDS` | 30 | Sync interval |
+| `MAX_SERVERS` | 64 | Maximum servers |
+| `MAX_SAMPLES` | 64 | Maximum samples for filtering |
+| `MARX_K` | 3 | Marx filter coefficient |
+| `PHI` | 15 | Root dispersion aging factor |
 
-1. **NTPsec** - интеграция с NTPsec для безопасности
-2. **Database backend** - хранение истории синхронизации
-3. **Web UI** - веб-интерфейс для мониторинга
-4. **Cluster mode** - кластеризация нескольких серверов
-5. **Load balancing** - балансировка нагрузки между серверами
+## Formulas
 
-
-## Параметры
-
-| Константа | Значение | Описание |
-|-----------|----------|----------|
-| `NTP_PORT` | 123 | Порт NTP |
-| `SYNC_INTERVAL_SECONDS` | 30 | Интервал синхронизации |
-| `MAX_SERVERS` | 64 | Макс. количество серверов |
-| `MAX_SAMPLES` | 64 | Макс. образцов для фильтрации |
-| `MARX_K` | 3 | Коэффициент фильтрации Маркса |
-
-## Формулы
-
-### Задержка (Round-trip Delay)
+### Delay (Round-trip Delay)
 
 ```
 delay = (T4 - T1) - (T3 - T2)
 ```
 
-### Смещение (Offset)
+### Offset
 
 ```
 offset = ½[(T2 - T1) + (T3 - T4)]
 ```
 
-Где:
-- T1 = Originate Timestamp (отправка запроса)
-- T2 = Receive Timestamp (приём запроса)
-- T3 = Transmit Timestamp (отправка ответа)
-- T4 = Destination Timestamp (приём ответа)
+Where:
+- T1 = Originate Timestamp (request sent)
+- T2 = Receive Timestamp (request received)
+- T3 = Transmit Timestamp (response sent)
+- T4 = Destination Timestamp (response received)
 
-### Алгоритм Маркса
+### Marx Filter
 
-Фильтрация выбросов на основе Median Absolute Deviation (MAD):
+Outlier rejection based on Median Absolute Deviation (MAD):
 
 ```
 threshold = median + k * MAD
 ```
 
-Отбрасываются образцы, где `|delay - median| > threshold`.
+Samples where `|delay - median| > threshold` are rejected.
 
-## Примеры использования
+## Testing
 
-### Как NTP-сервер
-
-```bash
-# Конфигурация
-echo "0.pool.ntp.org:123" > /etc/time_sync/servers.conf
-
-# Запуск
-sudo ./ntpd
-```
-
-### Как NTP-клиент
-
-Добавьте в `/etc/ntpd.conf`:
-
-```
-server 0.pool.ntp.org iburst
-server time.google.com iburst
-```
-
-## Тестирование
-
-Проверка синхронизации:
+Check synchronization:
 
 ```bash
-# Проверка времени системы
+# Check system time
 date
 
-# Проверка NTP статуса (если установлен ntpdate)
+# Check NTP status (if ntpq is installed)
 ntpq -p
 
-# Проверка через ntpdate
+# Check with ntpdate
 ntpq -p
 ```
 
-## Файлы проекта
+## Known Limitations
 
-```
-ntpd.c      - Исходный код (1166 строк)
-ntpd.o      - Объектный файл
-ntpd        - Исполняемый файл
-Makefile    - Файл сборки (опционально)
-README.md   - Документация
-```
+1. **Port 123** requires root or CAP_NET_BIND_SERVICE
+2. **DNS resolution** works only with IPv4
+3. **Single socket** for incoming requests (no multicast support)
 
-## Известные ограничения
+## Security Considerations
 
-1. **Порт 123** требует root или CAP_NET_BIND_SERVICE
-2. **DNS-резолвинг** работает только с IPv4
-3. **Один сокет** для входящих запросов (не поддерживает мультикастинг)
+- Extension fields are properly parsed and validated
+- Kiss-o'-Death markers are detected and handled
+- Leap Indicator is checked before processing
+- Thread-safe access to shared state variables
+- Integer overflow protection in calculations
 
-## Лицензия
+## License
 
 MIT License
 
-## Ссылки
+## References
 
 - [RFC 5905 - NTPv4 Specification](https://www.rfc-editor.org/rfc/rfc5905)
 - [RFC 5906 - IPv4-mapped IPv6 Addresses](https://www.rfc-editor.org/rfc/rfc5906)
