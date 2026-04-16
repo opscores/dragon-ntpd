@@ -1514,8 +1514,9 @@ int main(int argc, char *argv[]) {
     }
 
     syslog(LOG_NOTICE, "=====================================================================");
+    int sync_interval = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
     syslog(LOG_NOTICE, "Сервер NTP запущен. Обнаружено %d серверов. Интервал: %d сек.",
-            g_server_count, SYNC_INTERVAL_SECONDS);
+            g_server_count, sync_interval);
     syslog(LOG_NOTICE, "=====================================================================");
 
     /* Создание сокета для обработки входящих запросов */
@@ -1575,7 +1576,8 @@ int main(int argc, char *argv[]) {
                                "завершились ошибкой.");
         }
 
-        sleep(SYNC_INTERVAL_SECONDS);
+        int sync_interval = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
+        sleep((unsigned int)sync_interval);
     }
 
     /* Очистка ресурсов (через atexit) */
