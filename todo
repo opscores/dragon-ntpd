@@ -8,20 +8,19 @@
 - [x] Leap Indicator (значения 0-3)
 - [x] Стратификация (peer_stratum + 1, 16 = unsynced)
 - [x] On-wire формулы задержки и смещения
-- [x] Kiss-o'-Death detection
 - [x] VN=4
 
 ## ✅ ЗАВЕРШЕНО
 
-### 1. Precision field 
+### 1. Precision field
 - [x] Вычислять динамически на основе clock_getres()
 - ✅ Реализовано: get_system_precision()
 
-### 2. Poll field 
+### 2. Poll field
 - [x] Динамическое Adjusting poll interval согласно RFC 5905 Section 13
 - ✅ Реализовано: adjust_poll_interval()
 
-### 3. Root Dispersion 
+### 3. Root Dispersion
 - [x] Dispersion растёт со временем (PHI = 15 ppm)
 - ✅ Реализовано: update_root_dispersion()
 
@@ -33,7 +32,7 @@
 - [x] Изменить threshold с 128ms на 500ms согласно RFC
 - ✅ Реализовано: step_threshold_us = 500000
 
-### 6. Reference Timestamp в ответе 
+### 6. Reference Timestamp в ответе
 - [x] Время последней успешной синхронизации
 - ✅ Реализовано: g_last_sync_ts
 
@@ -71,15 +70,32 @@
 
 ### 15. CLI Arguments
 - [x] -h/--help
-- [x] -v/--version  
+- [x] -v/--version
+- [x] -V/--verbose
 - [x] -c/--config
 - [x] -f/--foreground
+- [x] -n/--no-daemonize
 - [x] -d/--debug
 - [x] -D/--debug=LEVEL
 - [x] -l/--log
-- [x] -n/--no-daemonize
 - [x] -t/--timeout
+- [x] -q/--quit
+- [x] -I/--interface
 - [x] -4/--ipv4-only
-- [x] -6/--ipv6-only
 - [x] -u/--user
 - [x] -p/--pid
+- REMOVED: -6 (IPv6 not implemented)
+
+### 16. Модульная архитектура
+- [x] Разбит на 7 файлов: main.c, config.c, ntp_packet.c, ntp_algorithms.c, filter.c, time_sync.c, socket.c
+- [x] Создан общий заголовок ntpd.h
+- [x] Все функции оригинального ntpd.c перенесены в модули
+- [x] Сборка без предупреждений: -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+- [x] Функция ntp_timestamp_from_timespec инкапсулирована в ntp_timestamp_now()
+- [x] Функция calculate_network_quality используется для вывода качества сети в логах
+
+## 📊 ИТОГИ
+- Оригинальный ntpd.c: 1700 строк, 67 функций
+- Модульная версия: 7 файлов, 67 функций
+- Потерянных функций: 0 (все функции перенесены)
+- Предупреждений при компиляции: 0

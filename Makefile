@@ -1,11 +1,10 @@
 CC ?= cc
 
 TARGET := ntpd
-SRC := ntpd.c
+SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c
 
 CSTD := -std=c11
 
-# Warnings tuned for C (avoid -Wstrict-prototypes false-positives on some setups)
 WARN := -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wformat=2 -Wundef
 
 BASE_CFLAGS := $(CSTD) $(WARN)

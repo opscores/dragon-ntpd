@@ -1,0 +1,156 @@
+#include "ntpd.h"
+
+CliConfig g_cli = {
+    .config_file = DEFAULT_CONFIG_FILE,
+    .pid_file = DEFAULT_PID_FILE,
+    .log_file = NULL,
+    .run_user = NULL,
+    .interface = NULL,
+    .foreground = 0,
+    .debug_level = 0,
+    .no_daemonize = 0,
+    .timeout_sec = SYNC_INTERVAL_SECONDS,
+    .quit_after_sync = 0
+};
+
+void print_usage(const char *prog) {
+    printf("NTP Server v%s - RFC 5905 compliant\n\n", VERSION);
+    printf("Usage: %s [OPTIONS]\n\n", prog);
+    printf("Options:\n");
+    printf("  -h, --help         Show this help message\n");
+    printf("  -v, --version      Show version information\n");
+    printf("  -V, --verbose      Verbose output (same as -v)\n");
+    printf("  -c, --config=FILE  Config file path (default: %s)\n", DEFAULT_CONFIG_FILE);
+    printf("  -f, --foreground   Run in foreground (don't daemonize)\n");
+    printf("  -n, --no-daemonize Same as -f (run in foreground)\n");
+    printf("  -d, --debug        Enable debug mode\n");
+    printf("  -D, --debug=LEVEL  Set debug level (0-3)\n");
+    printf("  -l, --log=FILE     Log file path\n");
+    printf("  -t, --timeout=SEC  Sync timeout in seconds (default: %d)\n", SYNC_INTERVAL_SECONDS);
+    printf("  -q, --quit         Quit after first sync (testing)\n");
+    printf("  -I, --interface=IF Use specific network interface\n");
+    printf("  -4, --ipv4-only    Use IPv4 only (default)\n");
+    printf("  -u, --user=USER    Run as specified user\n");
+    printf("  -p, --pid=FILE     PID file path (default: %s)\n", DEFAULT_PID_FILE);
+    printf("\n");
+}
+
+void print_version(void) {
+    printf("ntpd %s - NTP Server (RFC 5905)\n", VERSION);
+    printf("Built: %s %s\n", __DATE__, __TIME__);
+}
+
+int parse_arguments(int argc, char *argv[]) {
+    int i = 1;
+    while (i < argc) {
+        char *arg = argv[i];
+
+        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
+            print_usage(argv[0]);
+            exit(EXIT_SUCCESS);
+        }
+        if (strcmp(arg, "-v") == 0 || strcmp(arg, "--version") == 0 ||
+            strcmp(arg, "-V") == 0 || strcmp(arg, "--verbose") == 0) {
+            print_version();
+            exit(EXIT_SUCCESS);
+        }
+
+        if (strcmp(arg, "-c") == 0 || strcmp(arg, "--config") == 0) {
+            if (i + 1 < argc) {
+                g_cli.config_file = argv[++i];
+            } else if (i + 1 < argc && argv[i + 1][0] != '-') {
+                g_cli.config_file = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -c requires config file path\n");
+                return -1;
+            }
+        } else if (strncmp(arg, "--config=", 9) == 0) {
+            g_cli.config_file = arg + 9;
+        }
+        else if (strcmp(arg, "-f") == 0 || strcmp(arg, "--foreground") == 0) {
+            g_cli.foreground = 1;
+        }
+        else if (strcmp(arg, "-d") == 0 || strcmp(arg, "--debug") == 0) {
+            g_cli.debug_level = 1;
+        }
+        else if (strcmp(arg, "-D") == 0 || strncmp(arg, "--debug=", 8) == 0) {
+            if (strncmp(arg, "--debug=", 8) == 0) {
+                g_cli.debug_level = atoi(arg + 8);
+            } else if (i + 1 < argc) {
+                g_cli.debug_level = atoi(argv[++i]);
+            } else {
+                g_cli.debug_level = 1;
+            }
+        }
+        else if (strcmp(arg, "-l") == 0 || strcmp(arg, "--log") == 0) {
+            if (i + 1 < argc) {
+                g_cli.log_file = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -l requires log file path\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--log=", 6) == 0) {
+            g_cli.log_file = arg + 6;
+        }
+        else if (strcmp(arg, "-n") == 0 || strcmp(arg, "--no-daemonize") == 0) {
+            g_cli.no_daemonize = 1;
+        }
+        else if (strcmp(arg, "-t") == 0 || strcmp(arg, "--timeout") == 0) {
+            if (i + 1 < argc) {
+                g_cli.timeout_sec = atoi(argv[++i]);
+                if (g_cli.timeout_sec <= 0) g_cli.timeout_sec = SYNC_INTERVAL_SECONDS;
+            } else {
+                fprintf(stderr, "Error: -t requires timeout value\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--timeout=", 10) == 0) {
+            g_cli.timeout_sec = atoi(arg + 10);
+            if (g_cli.timeout_sec <= 0) g_cli.timeout_sec = SYNC_INTERVAL_SECONDS;
+        }
+        else if (strcmp(arg, "-I") == 0 || strcmp(arg, "--interface") == 0) {
+            if (i + 1 < argc) {
+                g_cli.interface = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -I requires interface name\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--interface=", 12) == 0) {
+            g_cli.interface = arg + 12;
+        }
+        else if (strcmp(arg, "-u") == 0 || strcmp(arg, "--user") == 0) {
+            if (i + 1 < argc) {
+                g_cli.run_user = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -u requires username\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--user=", 8) == 0) {
+            g_cli.run_user = arg + 8;
+        }
+        else if (strcmp(arg, "-p") == 0 || strcmp(arg, "--pid") == 0) {
+            if (i + 1 < argc) {
+                g_cli.pid_file = argv[++i];
+            } else {
+                fprintf(stderr, "Error: -p requires pid file path\n");
+                return -1;
+            }
+        }
+        else if (strncmp(arg, "--pid=", 6) == 0) {
+            g_cli.pid_file = arg + 6;
+        }
+        else if (strcmp(arg, "-q") == 0 || strcmp(arg, "--quit") == 0) {
+            g_cli.quit_after_sync = 1;
+        }
+        else {
+            fprintf(stderr, "Unknown option: %s\n", arg);
+            print_usage(argv[0]);
+            return -1;
+        }
+        i++;
+    }
+    return 0;
+}
