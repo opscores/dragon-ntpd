@@ -188,6 +188,7 @@ static uint32_t g_local_root_delay = 0; /* 16.16 */
 static uint32_t g_local_root_disp = 0;  /* 16.16 */
 static uint8_t g_local_li = 3;          /* 3 = alarm when unsynced */
 static time_t g_last_dispersion_update = 0; /* last time dispersion was updated */
+static NtpTimestamp g_last_sync_ts = {0, 0}; /* timestamp of last successful sync */
 
 #define PHI 15  /* maximum drift rate in ppm (RFC 5905 default) */
 
@@ -1127,7 +1128,9 @@ static int sync_ntp_time(const char *ip, const char *port) {
                     pthread_mutex_lock(&g_mutex);
                     g_time_synced = (stratum <= 15);
                     g_local_stratum = stratum;
-                    g_local_ref_ts = ntp_timestamp_now();
+                    /* RFC 5905: ref_ts = last time we were synced (not current time) */
+                    g_last_sync_ts = t4;
+                    g_local_ref_ts = g_last_sync_ts;
                     g_local_root_delay = ntp_u16_16_from_us(delay_us);
                     uint64_t abs_off = (offset_us < 0) ? (uint64_t)(-offset_us) : (uint64_t)offset_us;
                     uint64_t jitter_us = ntp_offset_jitter_us_locked();
