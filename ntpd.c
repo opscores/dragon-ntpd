@@ -188,6 +188,29 @@ static uint32_t g_local_root_delay = 0; /* 16.16 */
 static uint32_t g_local_root_disp = 0;  /* 16.16 */
 static uint8_t g_local_li = 3;          /* 3 = alarm when unsynced */
 
+static int8_t g_local_precision = -20;  /* system precision (log2 seconds), initialized at startup */
+
+static int8_t get_system_precision(void) {
+    struct timespec ts;
+    if (clock_getres(CLOCK_REALTIME, &ts) == 0) {
+        if (ts.tv_sec == 0 && ts.tv_nsec == 0) {
+            return -20;
+        }
+        if (ts.tv_sec > 0) {
+            int8_t p = 0;
+            time_t s = ts.tv_sec;
+            while (s > 0) { p++; s >>= 1; }
+            return (p > 6) ? 6 : -p;
+        }
+        int64_t ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+        if (ns <= 0) return -20;
+        int8_t p = 0;
+        while (ns < 1000000000LL) { p--; ns <<= 1; }
+        return p;
+    }
+    return -20;
+}
+
 static uint32_t ntp_u16_16_from_us(uint64_t us) {
     /* floor(us * 2^16 / 1e6) */
     if (us > (UINT64_MAX / 65536ULL)) return UINT32_MAX;
@@ -345,8 +368,8 @@ static void create_ntp_request(void *buffer, NtpTimestamp *xmit_out) {
     /* LI=0, VN=4, Mode=3 (client) */
     p[0] = (uint8_t)((0u << NTP_LI_SHIFT) | ((uint8_t)NTP_VN_4 << NTP_VN_SHIFT) | 3u);
     p[1] = 0;              /* stratum */
-    p[2] = 4;              /* poll */
-    p[3] = (uint8_t)-20;   /* precision (примерно 1 мкс) */
+    p[2] = 4;                       /* poll */
+    p[3] = (uint8_t)g_local_precision; /* precision (вычисляется при старте) */
 
     /* Transmit timestamp (T1) */
     NtpTimestamp t1 = ntp_timestamp_now();
@@ -667,8 +690,8 @@ static void handle_client_request(const void *buffer, size_t size,
                             (uint8_t)4u);
 
     response[1] = out_stratum;
-    response[2] = (uint8_t)pkt.poll;     /* echo client poll */
-    response[3] = (uint8_t)-20;          /* local precision */
+    response[2] = (uint8_t)pkt.poll;         /* echo client poll */
+    response[3] = (uint8_t)g_local_precision; /* local precision */
 
     write_u32be(&response[4], out_root_delay);
     write_u32be(&response[8], out_root_disp);
@@ -1072,6 +1095,12 @@ int main(int argc, char *argv[]) {
 
     /* Инициализация системного логгера */
     openlog("ntpd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
+
+    g_local_precision = get_system_precision();
+    syslog(LOG_INFO, "System precision: %d (2^%d = %.3f сек)", 
+            g_local_precision, g_local_precision, 
+            g_local_precision >= 0 ? (double)(1 << g_local_precision) : 
+                                     (double)1.0 / (double)(1LL << (-g_local_precision)));
 
     /* Установка обработчиков сигналов */
     struct sigaction sa;
