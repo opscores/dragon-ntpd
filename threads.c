@@ -116,7 +116,7 @@ static int handle_peer_request(const void *buffer, size_t size,
     }
 
     /* Проверка режима (должен быть клиентом - MODE 3) */
-    if (pkt.li_vn_mode & NTP_MODE_MASK != NTP_MODE_CLIENT) {
+    if ((pkt.li_vn_mode & NTP_MODE_MASK) != NTP_MODE_CLIENT) {
         syslog(LOG_DEBUG, "Не клиентский режим от %s:%s (MODE=%u)",
                ip, port, pkt.li_vn_mode & NTP_MODE_MASK);
         return -1;
@@ -164,12 +164,12 @@ static int handle_peer_request(const void *buffer, size_t size,
 
 /**
  * Основной цикл потока обработки пэера
- * 
+ *
  * @param arg Указатель на контекст потока
- * 
- * @return 0 на успех
+ *
+ * @return void * (NULL) на успех
  */
-static int peer_thread_main(void *arg) {
+static void *peer_thread_main(void *arg) {
     PeerThreadContext *ctx = (PeerThreadContext *)arg;
 
     syslog(LOG_INFO, "Поток обработки пэера запущен для %s:%s",
@@ -222,7 +222,7 @@ static int peer_thread_main(void *arg) {
     syslog(LOG_INFO, "Поток обработки пэера %s:%s завершён",
            ctx->ip, ctx->port);
 
-    return 0;
+    return NULL;
 }
 
 /**
@@ -338,15 +338,14 @@ cleanup:
 
 /**
  * Остановка потока обработки пэера
- * 
- * @return 0 на успех, < 0 на ошибку
+ *
+ * @return void
  */
-int stop_peer_thread(void) {
-    int ret = 0;
+void stop_peer_thread(void) {
     int join_ret = 0;
 
     if (!atomic_load_explicit(&g_peer_thread_running, memory_order_acquire)) {
-        return 0;
+        return;
     }
 
     /* Сброс флагов */
@@ -367,8 +366,6 @@ int stop_peer_thread(void) {
     atomic_thread_fence(memory_order_acquire);
 
     syslog(LOG_INFO, "Поток пэера остановлен");
-
-    return ret;
 }
 
 /**
@@ -423,9 +420,9 @@ static void update_system_clock(int64_t offset_us, int correction) {
 
     /* Уведомление о коррекции */
     if (correction == STEP) {
-        syslog(LOG_NOTICE, "Коррекция часов: STEP %lld мкс", offset_us);
+        syslog(LOG_INFO, "Коррекция часов: STEP %ld мкс", (long)offset_us);
     } else if (correction == SLEW) {
-        syslog(LOG_NOTICE, "Коррекция часов: SLEW %lld мкс", offset_us);
+        syslog(LOG_INFO, "Коррекция часов: SLEW %ld мкс", (long)offset_us);
     }
 
     pthread_mutex_unlock(&g_clock_ctx.clock_mutex);
@@ -433,12 +430,12 @@ static void update_system_clock(int64_t offset_us, int correction) {
 
 /**
  * Основной цикл потока обработки часов
- * 
+ *
  * @param arg Указатель на контекст потока
- * 
- * @return 0 на успех
+ *
+ * @return void * (NULL) на успех
  */
-static int clock_thread_main(void *arg) {
+static void *clock_thread_main(void *arg) {
     ClockThreadContext *ctx = (ClockThreadContext *)arg;
 
     syslog(LOG_INFO, "Поток обработки часов запущен (интервал %d мс)",
@@ -499,7 +496,7 @@ static int clock_thread_main(void *arg) {
 
     syslog(LOG_INFO, "Поток обработки часов завершён");
 
-    return 0;
+    return NULL;
 }
 
 /**
@@ -589,15 +586,14 @@ cleanup:
 
 /**
  * Остановка потока обработки часов
- * 
- * @return 0 на успех, < 0 на ошибку
+ *
+ * @return void
  */
-int stop_clock_thread(void) {
-    int ret = 0;
+void stop_clock_thread(void) {
     int join_ret = 0;
 
     if (!atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) {
-        return 0;
+        return;
     }
 
     /* Сброс флагов */
@@ -618,8 +614,6 @@ int stop_clock_thread(void) {
     atomic_thread_fence(memory_order_acquire);
 
     syslog(LOG_INFO, "Поток часов остановлен");
-
-    return ret;
 }
 
 /**

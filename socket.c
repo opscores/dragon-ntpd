@@ -1,4 +1,5 @@
 #include "ntpd.h"
+#include <stdlib.h>
 
 int g_sync_sock = -1;
 
@@ -69,22 +70,37 @@ void close_socket(int sock) {
     }
 }
 
-void handle_client_request(const void *buffer, size_t size,
-                     const char *ip, const char *port) {
+/**
+ * Обработка входящего запроса в отдельном потоке (RFC 5905 Section 5)
+ *
+ * @param arg Указатель на структуру PeerRequestData
+ *
+ * @return void * (NULL) на успех
+ */
+static void *handle_peer_request_thread(void *arg) {
+    PeerRequestData *data = (PeerRequestData *)arg;
+    const void *buffer = data->buffer;
+    size_t size = data->size;
+    const char *ip = data->ip;
+    const char *port = data->port;
+    free(data);
+
+    syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен", ip, port);
+
     if (buffer == NULL || ip == NULL || port == NULL) {
         syslog(LOG_WARNING, "NULL указатель при обработке запроса клиента");
-        return;
+        return NULL;
     }
 
     if (size < 48) {
         syslog(LOG_WARNING, "Запрос клиента слишком мал: %zu байт", size);
-        return;
+        return NULL;
     }
 
     NtpPacket pkt;
     if (!parse_ntp_packet(buffer, size, &pkt)) {
         syslog(LOG_WARNING, "Ошибка парсинга запроса клиента");
-        return;
+        return NULL;
     }
 
     uint8_t li = (uint8_t)((pkt.li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
@@ -101,12 +117,12 @@ void handle_client_request(const void *buffer, size_t size,
         syslog(LOG_INFO, "Broadcast request от %s:%s", ip, port);
     } else {
         syslog(LOG_WARNING, "Неизвестный mode %u от %s:%s", mode, ip, port);
-        return;
+        return NULL;
     }
 
     if (vn != NTP_VN_4) {
         syslog(LOG_WARNING, "Неверная версия NTP: %u от %s:%s", vn, ip, port);
-        return;
+        return NULL;
     }
 
     if (ntp_is_kod(&pkt)) {
@@ -117,12 +133,12 @@ void handle_client_request(const void *buffer, size_t size,
         kod[3] = (char)(pkt.ref_id & 0xFF);
         kod[4] = '\0';
         syslog(LOG_WARNING, "KoD пакет от %s:%s (code=%s) - отклонён", ip, port, kod);
-        return;
+        return NULL;
     }
 
     if (handle_leap_indicator(li)) {
         syslog(LOG_WARNING, "Пропускаем обработку из-за Leap Indicator");
-        return;
+        return NULL;
     }
 
     NtpTimestamp t2 = ntp_timestamp_now();
@@ -187,29 +203,70 @@ void handle_client_request(const void *buffer, size_t size,
     client_addr.sin_family = AF_INET;
     char *endp = NULL;
     unsigned long port_ul = strtoul(port, &endp, 10);
+
     if (endp == port || *endp != '\0' || port_ul > 65535UL) {
-        syslog(LOG_WARNING, "Неверный порт клиента: %s", port);
-        return;
+        syslog(LOG_WARNING, "Невалидный порт от %s:%s", ip, port);
+        return NULL;
     }
+
     client_addr.sin_port = htons((uint16_t)port_ul);
+
     if (inet_pton(AF_INET, ip, &client_addr.sin_addr) <= 0) {
-        syslog(LOG_WARNING, "Неверный IP клиента: %s", ip);
-        return;
+        syslog(LOG_WARNING, "Невалидный IP от %s:%s", ip, port);
+        return NULL;
     }
 
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
-        syslog(LOG_ERR, "Ошибка создания сокета: %s", strerror(errno));
-        return;
+        syslog(LOG_WARNING, "Ошибка создания сокетa: %s", strerror(errno));
+        return NULL;
     }
 
     if (sendto(sock, response, sizeof(response), 0,
                 (struct sockaddr *)&client_addr, sizeof(client_addr)) < 0) {
         syslog(LOG_WARNING, "Ошибка отправки ответа клиенту: %s",
                 strerror(errno));
-        close_socket(sock);
+        close(sock);
+        return NULL;
+    }
+
+    close(sock);
+
+    syslog(LOG_INFO, "Поток обработки запроса от %s:%s завершён", ip, port);
+    return NULL;
+}
+
+/**
+ * Обработка входящего запроса от клиента
+ *
+ * @param buffer Буфер с данными запроса
+ * @param size Размер буфера
+ * @param ip IP-адрес клиента
+ * @param port Порт клиента
+ *
+ * @return void
+ */
+void handle_client_request(const void *buffer, size_t size,
+                           const char *ip, const char *port) {
+    PeerRequestData *data = malloc(sizeof(PeerRequestData));
+    if (data == NULL) {
+        syslog(LOG_ERR, "Ошибка выделения памяти для PeerRequestData");
         return;
     }
 
-    close_socket(sock);
+    data->buffer = buffer;
+    data->size = size;
+    data->ip = ip;
+    data->port = port;
+
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, handle_peer_request_thread, data) != 0) {
+        syslog(LOG_ERR, "Ошибка создания потока обработки запроса: %s", strerror(errno));
+        free(data);
+        return;
+    }
+
+    pthread_detach(thread);
+    syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен", ip, port);
 }
+

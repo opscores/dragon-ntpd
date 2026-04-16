@@ -52,6 +52,7 @@
 #define NTP_LI_MASK   0xC0
 #define NTP_VN_MASK   0x38
 #define NTP_MODE_MASK 0x07
+#define NTP_MODE_CLIENT 3  /* NTP client mode (RFC 5905) */
 #define NTP_VN_SHIFT  3
 #define NTP_LI_SHIFT  6
 #define NTP_VN_4 4
@@ -100,6 +101,13 @@ typedef struct {
     time_t last_update;
     bool reachable;
 } PeerState;
+
+typedef struct {
+    const void *buffer;
+    size_t size;
+    const char *ip;
+    const char *port;
+} PeerRequestData;
 
 typedef struct {
     char *config_file;
@@ -177,6 +185,13 @@ void close_socket(int sock);
 int get_sync_socket(void);
 void handle_client_request(const void *buffer, size_t size, const char *ip, const char *port);
 
-void signal_handler(int sig);
+/* Threads functions (RFC 5905 Section 5) */
+int start_clock_thread(int interval_sec);
+void stop_clock_thread(void);
+void cleanup_clock_thread(void);
+int start_peer_thread(int sock_fd, const char *ip, const char *port,
+                      PeerState *peer_state);
+void stop_peer_thread(void);
+void cleanup_peer_thread(void);
 
 #endif

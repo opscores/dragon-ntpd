@@ -22,6 +22,14 @@ int8_t g_peer_poll = 4;
 void cleanup_resources(void) {
     syslog(LOG_INFO, "Очистка ресурсов...");
 
+    /* Остановка потока коррекции часов */
+    stop_clock_thread();
+    cleanup_clock_thread();
+
+    /* Остановка потока обработки пэеров */
+    stop_peer_thread();
+    cleanup_peer_thread();
+
     if (g_cli.pid_file != NULL) {
         if (unlink(g_cli.pid_file) == 0) {
             syslog(LOG_INFO, "PID файл удалён: %s", g_cli.pid_file);
@@ -239,6 +247,13 @@ int main(int argc, char *argv[]) {
     int listen_sock = create_udp_socket(NTP_PORT);
     if (listen_sock < 0) {
         syslog(LOG_WARNING, "Не удалось создать сокет для входящих запросов");
+    }
+
+    /* Запуск потока коррекции часов (RFC 5905 Section 5) */
+    if (start_clock_thread(sync_interval_1) != 0) {
+        syslog(LOG_CRIT, "Не удалось запустить поток коррекции часов");
+    } else {
+        syslog(LOG_INFO, "Поток коррекции часов запущен (интервал %d сек)", sync_interval_1);
     }
 
     while (1) {
