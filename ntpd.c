@@ -196,6 +196,21 @@ int g_sample_count = 0;
 
 /* Mutex для thread-safe доступа к глобальным данным */
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_sync_cond = PTHREAD_COND_INITIALIZER;
+static pthread_t g_peer_thread = 0;
+static pthread_t g_clock_thread = 0;
+
+/* RFC 5905 Section 5: запустить peer thread (заглушка для будущего) */
+static int start_peer_thread(void) {
+    /* TODO: RFC 5905 требует отдельный peer process для каждого сервера */
+    return 0;
+}
+
+/* RFC 5905 Section 5: запустить clock discipline thread (заглушка для будущего) */
+static int start_clock_thread(void) {
+    /* TODO: RFC 5905 требует clock adjust process */
+    return 0;
+}
 
 /* ============================================================================
  * RFC 5905: состояние локального сервера
