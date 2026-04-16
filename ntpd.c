@@ -195,6 +195,61 @@ static int8_t g_local_precision = -20;  /* system precision (log2 seconds), init
 static int8_t g_local_poll = 4;           /* poll exponent (log2 seconds), default 16 sec */
 static int8_t g_peer_poll = 4;           /* last received poll from peer */
 
+#define MAX_PEERS 8
+
+typedef struct {
+    char ip[64];
+    char port[16];
+    uint8_t stratum;
+    uint64_t delay_us;
+    int64_t offset_us;
+    uint64_t jitter_us;
+    uint32_t root_disp;
+    time_t last_update;
+    bool reachable;
+} PeerState;
+
+static PeerState g_peers[MAX_PEERS];
+static int g_peer_count = 0;
+static int g_selected_peer = -1;
+
+static uint8_t compute_system_offset(int8_t *offsets, int count, int *best_idx) {
+    if (count < 2 || best_idx == NULL) {
+        if (best_idx) *best_idx = 0;
+        return count > 0 ? 0 : 16;
+    }
+    
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = 0; j < count - i - 1; j++) {
+            if (offsets[j] > offsets[j + 1]) {
+                int8_t tmp = offsets[j];
+                offsets[j] = offsets[j + 1];
+                offsets[j + 1] = tmp;
+            }
+        }
+    }
+    
+    int8_t median = offsets[count / 2];
+    int8_t total = 0;
+    int used = 0;
+    for (int i = 0; i < count; i++) {
+        int8_t diff = offsets[i] - median;
+        if (diff < 0) diff = -diff;
+        if (diff < 500) {
+            total += offsets[i];
+            used++;
+        }
+    }
+    
+    if (used > 0) {
+        *best_idx = 0;
+        return total / used;
+    }
+    
+    *best_idx = 0;
+    return median;
+}
+
 /* Forward declaration */
 static uint32_t ntp_u16_16_from_us(uint64_t us);
 
