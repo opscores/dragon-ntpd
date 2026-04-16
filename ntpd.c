@@ -39,6 +39,12 @@
 #include <sys/time.h>
 #include <pwd.h>
 #include <unistd.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+
+#ifndef IFNAMSZ
+#define IFNAMSZ 16
+#endif
 
 /* ============================================================================
  * ФУНКЦИОНАЛЬНЫЕ ОБЪЯВЛЕНИЯ
@@ -1143,7 +1149,26 @@ static int create_udp_socket(int port) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons((uint16_t)port);
-    addr.sin_addr.s_addr = INADDR_ANY;
+
+    /* Привязка к конкретному интерфейсу если указан */
+    if (g_cli.interface != NULL) {
+        struct ifreq ifr;
+        memset(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, g_cli.interface, IFNAMSZ - 1);
+        
+        if (ioctl(sock, SIOCGIFADDR, &ifr) == 0) {
+            struct sockaddr_in *ifa_addr = (struct sockaddr_in *)&ifr.ifr_addr;
+            addr.sin_addr = ifa_addr->sin_addr;
+            syslog(LOG_INFO, "Привязка к интерфейсу %s: %s", 
+                 g_cli.interface, inet_ntoa(addr.sin_addr));
+        } else {
+            syslog(LOG_WARNING, "Не удалось получить адрес интерфейса %s: %s", 
+                  g_cli.interface, strerror(errno));
+            addr.sin_addr.s_addr = INADDR_ANY;
+        }
+    } else {
+        addr.sin_addr.s_addr = INADDR_ANY;
+    }
 
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
