@@ -352,8 +352,8 @@ static uint64_t ntp_offset_jitter_us_locked(void) {
 }
 
 static int apply_time_correction_slew_or_step(int64_t offset_us) {
-    /* Heuristic: step for huge offsets, slew for small ones */
-    const int64_t step_threshold_us = 128 * 1000; /* 128 ms */
+    /* RFC 5905: Step for huge offsets (>0.5s), slew for small ones */
+    const int64_t step_threshold_us = 500000; /* 500 ms (RFC 5905 default) */
 
     if (offset_us > step_threshold_us || offset_us < -step_threshold_us) {
         struct timespec now_ts;
