@@ -177,9 +177,13 @@ static void *peer_thread_main(void *arg) {
 
     /* Установка флагов (C11 memory barrier implicit in atomic_store) */
     atomic_store_explicit(&g_peer_thread_running, 1, memory_order_release);
+
+    /* Защита g_peer_ctx мьютексом при инициализации */
+    pthread_mutex_lock(&g_peer_ctx.sock_mutex);
     g_peer_ctx.sock_valid = 1;
     g_peer_ctx.sock_fd = ctx->sock_fd;
     g_peer_ctx.peer_state = ctx->peer_state;
+    pthread_mutex_unlock(&g_peer_ctx.sock_mutex);
 
     /* Основной цикл */
     while (atomic_load_explicit(&g_peer_thread_running, memory_order_acquire)) {
@@ -206,10 +210,10 @@ static void *peer_thread_main(void *arg) {
         char client_ip[INET_ADDRSTRLEN];
         if (inet_ntop(AF_INET, &((struct sockaddr_in *)&g_peer_ctx.client_addr_storage)->sin_addr,
                       client_ip, sizeof(client_ip)) == NULL) {
-            strcpy(client_ip, "unknown");
+            snprintf(client_ip, sizeof(client_ip), "%s", "unknown");
         }
         char port_str[6];
-        snprintf(port_str, sizeof(port_str), "%u", (unsigned)ntohs(
+        snprintf(port_str, sizeof(port_str), "%hu", (unsigned short)ntohs(
             ((struct sockaddr_in *)&g_peer_ctx.client_addr_storage)->sin_port));
 
         handle_peer_request(buffer, (size_t)recv_len, client_ip, port_str);
@@ -241,8 +245,8 @@ static int peer_thread_init(int sock_fd, const char *ip, const char *port,
 
     /* Инициализация контекста */
     memset(&g_peer_ctx, 0, sizeof(g_peer_ctx));
-    strncpy(g_peer_ctx.ip, ip, sizeof(g_peer_ctx.ip) - 1);
-    strncpy(g_peer_ctx.port, port, sizeof(g_peer_ctx.port) - 1);
+    snprintf(g_peer_ctx.ip, sizeof(g_peer_ctx.ip), "%s", ip);
+    snprintf(g_peer_ctx.port, sizeof(g_peer_ctx.port), "%s", port);
     g_peer_ctx.sock_fd = sock_fd;
     g_peer_ctx.peer_state = peer_state;
     g_peer_ctx.sock_type = SOCK_DGRAM;
@@ -267,6 +271,7 @@ static int peer_thread_init(int sock_fd, const char *ip, const char *port,
 
 cleanup_mutex:
     pthread_mutex_destroy(&g_peer_ctx.sock_mutex);
+    pthread_cond_destroy(&g_peer_ctx.sock_cond);
 cleanup_attr:
     pthread_mutexattr_destroy(&attr);
 
@@ -542,6 +547,7 @@ static int clock_thread_init(int interval_ms) {
 
 cleanup_mutex:
     pthread_mutex_destroy(&g_clock_ctx.clock_mutex);
+    pthread_cond_destroy(&g_clock_ctx.clock_cond);
 cleanup_attr:
     pthread_mutexattr_destroy(&attr);
 
@@ -582,10 +588,6 @@ int start_clock_thread(int interval_ms) {
 
     /* Сохранение дескриптора потока */
     g_clock_ctx.thread_id = thread;
-
-    /* Установка интервала по умолчанию (C11 memory barrier для согласованности видимости данных) */
-    atomic_thread_fence(memory_order_release);  /* Барьер памяти */
-    g_clock_ctx.interval_ms = SYNC_INTERVAL_SECONDS * 1000;
 
     syslog(LOG_INFO, "Поток часов запущен (интервал %d мс)", interval_ms);
 
