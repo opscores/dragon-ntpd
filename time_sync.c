@@ -179,7 +179,42 @@ int sync_ntp_time(const char *ip, const char *port) {
                 if (calculate_delay_offset(&t1, &pkt.recv_ts, &pkt.xmit_ts, &t4, &delay_us, &offset_us)) {
                     g_peer_poll = pkt.poll;
 
-                    uint8_t stratum = ntp_local_stratum_from_peer(pkt.stratum);
+                    uint8_t peer_stratum = pkt.stratum;
+                    uint8_t stratum = ntp_local_stratum_from_peer(peer_stratum);
+
+                    /* RFC 5905 Section 11.3: Do not correct if peer is not reliable */
+                    if (peer_stratum == 0 || peer_stratum > 15) {
+                        syslog(LOG_WARNING, "Пропуск коррекции: ненадёжный сервер (stratum=%u)", peer_stratum);
+                        pthread_mutex_lock(&g_mutex);
+                        g_local_stratum = 16;
+                        g_time_synced = false;
+                        pthread_mutex_unlock(&g_mutex);
+                        close_socket(sock);
+                        return -1;
+                    }
+
+                    /* RFC 5905 Section 11.3: Do not step if offset exceeds MAXDIST (1 sec) */
+                    int64_t abs_offset_us = (offset_us >= 0) ? offset_us : -offset_us;
+                    if (abs_offset_us > MAXDIST) {
+                        syslog(LOG_WARNING, "Пропуск коррекции: смещение слишком большое (%" PRId64 " мкс > %d мкс)",
+                               offset_us, MAXDIST);
+                        pthread_mutex_lock(&g_mutex);
+                        g_local_stratum = 16;
+                        g_time_synced = false;
+                        pthread_mutex_unlock(&g_mutex);
+                        close_socket(sock);
+                        return -1;
+                    }
+
+                    /* RFC 5905 Section 11.3: Check for excessive delay (Bogus packet detection) */
+                    if (delay_us > MAXDIST * 10) {
+                        syslog(LOG_WARNING, "Пропуск коррекции: задержка слишком большая (%" PRIu64 " мкс)", delay_us);
+                        pthread_mutex_lock(&g_mutex);
+                        g_time_synced = false;
+                        pthread_mutex_unlock(&g_mutex);
+                        close_socket(sock);
+                        return -1;
+                    }
 
                     g_local_poll = adjust_poll_interval(g_local_poll, g_peer_poll, delay_us, offset_us);
 
@@ -187,7 +222,25 @@ int sync_ntp_time(const char *ip, const char *port) {
 
                     g_sample_count = marx_filter_outliers(g_samples, g_sample_count, MARX_K);
 
-                    (void)apply_time_correction_slew_or_step(offset_us);
+                    /* Get filtered offset from samples */
+                    int64_t filtered_offset = offset_us;
+                    if (g_sample_count > 0) {
+                        pthread_mutex_lock(&g_mutex);
+                        filtered_offset = g_samples[g_sample_count - 1].offset;
+                        pthread_mutex_unlock(&g_mutex);
+                    }
+
+                    /* Apply correction only if we have valid samples */
+                    if (g_sample_count >= 1) {
+                        int apply_result = apply_time_correction_slew_or_step(filtered_offset);
+                        if (apply_result == 0) {
+                            syslog(LOG_DEBUG, "Коррекция применена: %" PRId64 " мкс", filtered_offset);
+                        } else {
+                            syslog(LOG_WARNING, "Ошибка применения коррекции: %s", strerror(errno));
+                        }
+                    } else {
+                        syslog(LOG_DEBUG, "Пропуск коррекции: недостаточно выборок");
+                    }
 
                     pthread_mutex_lock(&g_mutex);
                     g_time_synced = (stratum <= 15);

@@ -39,6 +39,7 @@
 #define CONFIG_DIR "/etc/time_sync"
 #define CONFIG_FILE CONFIG_DIR "/servers.conf"
 #define NTP_PORT 123
+#define NTPQ_PORT 323
 #define BUFFER_SIZE 1024
 #define SYNC_INTERVAL_SECONDS 30
 #define MAX_SERVERS 64
@@ -46,6 +47,7 @@
 #define MAX_PEERS 8
 #define MARX_K 3
 #define PHI 15
+#define MAXDIST 1000000  /* RFC 5905 Section 11.3: max distance threshold (1 sec in us) */
 #define DEFAULT_CONFIG_FILE "/etc/time_sync/servers.conf"
 #define DEFAULT_PID_FILE "/var/run/ntpd.pid"
 #define DEFAULT_LOG_FILE "/var/log/ntpd.log"
