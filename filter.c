@@ -3,9 +3,13 @@
 pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void marx_add_sample_us(uint64_t ts_ns, uint64_t delay_us, int64_t offset_us) {
-    if (g_sample_count >= MAX_SAMPLES) return;
-
     pthread_mutex_lock(&g_mutex);
+
+    if (g_sample_count >= MAX_SAMPLES) {
+        pthread_mutex_unlock(&g_mutex);
+        return;
+    }
+
     g_samples[g_sample_count].ts = ts_ns;
     g_samples[g_sample_count].delay = delay_us;
     g_samples[g_sample_count].offset = offset_us;
@@ -25,7 +29,7 @@ void marx_remove_sample(int index) {
 }
 
 uint64_t marx_median(uint64_t *arr, int count) {
-    if (count == 0) return 0;
+    if (arr == NULL || count <= 0) return 0;
 
     for (int i = 0; i < count - 1; i++) {
         for (int j = 0; j < count - i - 1; j++) {
@@ -41,7 +45,7 @@ uint64_t marx_median(uint64_t *arr, int count) {
 }
 
 int marx_filter_outliers(NtpSample *samples, int count, int k) {
-    if (count < 3) return count;
+    if (samples == NULL || count < 3) return count;
     if (count > MAX_SAMPLES) count = MAX_SAMPLES;
 
     const int original_count = count;
@@ -61,13 +65,34 @@ int marx_filter_outliers(NtpSample *samples, int count, int k) {
     uint64_t mad = marx_median(abs_devs, count);
 
     uint64_t kmad;
-    if (mad != 0 && (uint64_t)k > (UINT64_MAX / mad)) {
-        kmad = UINT64_MAX;
+    if (mad == 0) {
+        kmad = 0;
     } else {
-        kmad = (uint64_t)k * mad;
+        if (k == 0) {
+            kmad = 0;
+        } else {
+            uint64_t k64 = (uint64_t)k;
+            if (k64 > (UINT64_MAX / mad)) {
+                kmad = UINT64_MAX;
+            } else {
+                kmad = k64 * mad;
+                if (kmad > UINT64_MAX - median) {
+                    kmad = UINT64_MAX;
+                }
+            }
+        }
     }
 
-    uint64_t threshold = (UINT64_MAX - median < kmad) ? UINT64_MAX : (median + kmad);
+    uint64_t threshold;
+    if (kmad == 0) {
+        threshold = median;
+    } else {
+        if (kmad > UINT64_MAX - median) {
+            threshold = UINT64_MAX;
+        } else {
+            threshold = median + kmad;
+        }
+    }
 
     int filtered = 0;
     for (int i = 0; i < count; i++) {
@@ -83,7 +108,12 @@ int marx_filter_outliers(NtpSample *samples, int count, int k) {
 }
 
 uint64_t ntp_offset_jitter_us_locked(void) {
-    if (g_sample_count <= 1) return 0;
+    pthread_mutex_lock(&g_mutex);
+
+    if (g_sample_count <= 1) {
+        pthread_mutex_unlock(&g_mutex);
+        return 0;
+    }
 
     long double mean = 0.0L;
     for (int i = 0; i < g_sample_count; i++) {
@@ -96,10 +126,19 @@ uint64_t ntp_offset_jitter_us_locked(void) {
         long double d = (long double)g_samples[i].offset - mean;
         var += d * d;
     }
-    var /= (long double)(g_sample_count - 1);
+
+    if (g_sample_count > 1) {
+        var /= (long double)(g_sample_count - 1);
+    }
+
     if (var < 0.0L) var = 0.0L;
     long double sd = sqrtl(var);
     if (sd < 0.0L) sd = 0.0L;
-    if (sd > (long double)UINT64_MAX) return UINT64_MAX;
+    if (sd > (long double)UINT64_MAX) {
+        pthread_mutex_unlock(&g_mutex);
+        return UINT64_MAX;
+    }
+
+    pthread_mutex_unlock(&g_mutex);
     return (uint64_t)sd;
 }
