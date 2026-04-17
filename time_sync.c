@@ -45,8 +45,20 @@ int apply_time_correction_slew_or_step(int64_t offset_us) {
     if (offset_us > STEP_THRESHOLD_US || offset_us < -STEP_THRESHOLD_US) {
         struct timespec now_ts;
         if (clock_gettime(CLOCK_REALTIME, &now_ts) != 0) return -1;
+
+        int64_t offset_ns = offset_us * 1000LL;
         int64_t ns = (int64_t)now_ts.tv_sec * 1000000000LL + (int64_t)now_ts.tv_nsec;
-        ns += offset_us * 1000LL;
+
+        if (offset_ns > 0 && ns > INT64_MAX - offset_ns) {
+            syslog(LOG_ERR, "Integer overflow in time correction");
+            return -1;
+        }
+        if (offset_ns < 0 && ns < INT64_MIN - offset_ns) {
+            syslog(LOG_ERR, "Integer overflow in time correction");
+            return -1;
+        }
+
+        ns += offset_ns;
         struct timespec new_ts;
         new_ts.tv_sec = (time_t)(ns / 1000000000LL);
         new_ts.tv_nsec = (long)(ns % 1000000000LL);
@@ -68,6 +80,10 @@ int apply_time_correction_slew_or_step(int64_t offset_us) {
 }
 
 int sync_ntp_time(const char *ip, const char *port) {
+    if (ip == NULL || port == NULL) {
+        return -1;
+    }
+
     int sock = get_sync_socket();
     if (sock < 0) {
         return -1;
@@ -76,11 +92,12 @@ int sync_ntp_time(const char *ip, const char *port) {
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
 
-    int port_num = atoi(port);
-    if (port_num <= 0 || port_num > 65535) {
+    long port_num_l = strtol(port, NULL, 10);
+    if (port_num_l < 1 || port_num_l > 65535 || errno != 0) {
         syslog(LOG_ERR, "Неверный порт: %s", port);
         return -1;
     }
+    int port_num = (int)port_num_l;
 
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));
@@ -175,8 +192,6 @@ int sync_ntp_time(const char *ip, const char *port) {
                 uint64_t delay_us;
                 int64_t offset_us;
                 if (calculate_delay_offset(&t1, &pkt.recv_ts, &pkt.xmit_ts, &t4, &delay_us, &offset_us)) {
-                    g_peer_poll = pkt.poll;
-
                     uint8_t peer_stratum = pkt.stratum;
                     uint8_t stratum = ntp_local_stratum_from_peer(peer_stratum);
 
@@ -218,15 +233,19 @@ int sync_ntp_time(const char *ip, const char *port) {
 
                     marx_add_sample_us((uint64_t)ntp_timestamp_to_ns(&t4), delay_us, offset_us);
 
+                    pthread_mutex_lock(&g_mutex);
                     g_sample_count = marx_filter_outliers(g_samples, g_sample_count, MARX_K);
 
                     /* Get filtered offset from samples */
                     int64_t filtered_offset = offset_us;
                     if (g_sample_count > 0) {
-                        pthread_mutex_lock(&g_mutex);
                         filtered_offset = g_samples[g_sample_count - 1].offset;
-                        pthread_mutex_unlock(&g_mutex);
                     }
+
+                    /* Update poll interval under mutex */
+                    g_local_poll = adjust_poll_interval(g_local_poll, pkt.poll, delay_us, offset_us);
+
+                    pthread_mutex_unlock(&g_mutex);
 
                     /* Apply correction only if we have valid samples */
                     if (g_sample_count >= 1) {
