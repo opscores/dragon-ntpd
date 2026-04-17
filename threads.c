@@ -169,6 +169,16 @@ static int handle_peer_request(const void *buffer, size_t size,
  *
  * @return void * (NULL) на успех
  */
+/**
+ * peer_thread_main - Main loop for peer thread (RFC 5905 Section 5)
+ * @arg: Pointer to PeerThreadContext
+ *
+ * Handles incoming NTP requests from peers.
+ * Uses atomic_bool for thread running flag (C11).
+ * Releases resources via pthread_detach().
+ *
+ * Return: void * (NULL) on exit
+ */
 static void *peer_thread_main(void *arg) {
     PeerThreadContext *ctx = (PeerThreadContext *)arg;
 

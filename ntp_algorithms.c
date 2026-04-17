@@ -2,6 +2,15 @@
 
 #define NS_PER_SEC 1000000000LL
 
+/**
+ * ntp_timestamp_to_ns - Convert NTP timestamp to nanoseconds
+ * @t: Pointer to NtpTimestamp
+ *
+ * Converts NTP timestamp (RFC 5905 Section 6) to Unix nanoseconds.
+ * Handles overflow checking for large timestamps.
+ *
+ * Return: Nanoseconds since Unix epoch, or 0 on error
+ */
 int64_t ntp_timestamp_to_ns(const NtpTimestamp *t) {
     if (t == NULL)
         return 0;
@@ -22,6 +31,21 @@ int64_t ntp_timestamp_to_ns(const NtpTimestamp *t) {
     return sec * NS_PER_SEC + nsec;
 }
 
+/**
+ * calculate_delay_offset - Calculate round-trip delay and clock offset
+ * @t1: Origin timestamp
+ * @t2: Receive timestamp
+ * @t3: Transmit timestamp
+ * @t4: Destination timestamp
+ * @delay_us: Pointer to store delay (output)
+ * @offset_us: Pointer to store offset (output)
+ *
+ * Implements NTP On-Wire Protocol (RFC 5905 Section 8):
+ * delay = (T4 - T1) - (T3 - T2)
+ * offset = ((T2 - T1) + (T3 - T4)) / 2
+ *
+ * Return: true on success, false on error
+ */
 bool calculate_delay_offset(const NtpTimestamp *t1,
                               const NtpTimestamp *t2,
                               const NtpTimestamp *t3,
@@ -51,6 +75,15 @@ bool calculate_delay_offset(const NtpTimestamp *t1,
     return true;
 }
 
+/**
+ * handle_leap_indicator - Handle leap indicator from NTP packet
+ * @li: Leap indicator value (0-3)
+ *
+ * RFC 5905 Section 7.3.1: Leap indicator values:
+ * 0 = No warning, 1 = +1s, 2 = -1s, 3 = Not sync
+ *
+ * Return: true if clock should NOT be adjusted, false otherwise
+ */
 bool handle_leap_indicator(uint8_t li) {
     switch (li) {
         case 0:
@@ -72,12 +105,32 @@ bool handle_leap_indicator(uint8_t li) {
 }
 
 uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum) {
+    /**
+     * ntp_local_stratum_from_peer - Calculate local stratum from peer stratum
+     * @peer_stratum: Stratum of peer server
+     *
+     * RFC 5905 Section 7.3.2: Local stratum = peer stratum + 1
+     * Special values: 0 (unspecified) or > 15 -> return 16 (unsynchronized)
+     *
+     * Return: Local stratum value
+     */
     if (peer_stratum == 0 || peer_stratum > 15) return 16;
     uint16_t s = (uint16_t)peer_stratum + 1u;
     if (s > 15u) return 15u;
     return (uint8_t)s;
 }
 
+/**
+ * compute_system_offset - Compute system offset from peer offsets (Combine Algorithm)
+ * @offsets: Array of peer offsets
+ * @count: Number of offsets
+ * @best_idx: Pointer to store best peer index (output)
+ *
+ * RFC 5905 Section 11.2.3: Combine Algorithm
+ * Simple average of valid offsets.
+ *
+ * Return: System stratum (0-15) or 16 on error
+ */
 uint8_t compute_system_offset(int64_t *offsets, int count, int *best_idx) {
     if (count < 2 || best_idx == NULL) {
         if (best_idx) {
@@ -131,6 +184,15 @@ uint8_t compute_system_offset(int64_t *offsets, int count, int *best_idx) {
     return (uint8_t)(median & 0xFF);
 }
 
+/**
+ * ntp_u16_16_from_us - Convert microseconds to NTP u16.16 fixed-point
+ * @us: Microseconds value
+ *
+ * RFC 5905 Section 6: Converts us to NTP short format
+ * Maximum representable: ~49.7 days
+ *
+ * Return: u16.16 fixed-point value
+ */
 uint32_t ntp_u16_16_from_us(uint64_t us) {
     /* Prevent overflow in multiplication: check us * 65536 <= UINT64_MAX */
     if (us > (UINT64_MAX / 65536ULL)) {
@@ -143,6 +205,17 @@ uint32_t ntp_u16_16_from_us(uint64_t us) {
     return (uint32_t)v;
 }
 
+/**
+ * update_root_dispersion - Update root dispersion (RFC 5905 Section 11.1)
+ * @current_disp: Current dispersion
+ * @offset_us: Clock offset in microseconds
+ * @jitter_us: Clock jitter in microseconds
+ *
+ * RFC 5905 Section 11.1: dispersion grows at PHI (15 ppm)
+ * plus contribution from peer jitter.
+ *
+ * Return: Updated dispersion value
+ */
 uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us) {
     time_t now = time(NULL);
 
@@ -206,9 +279,17 @@ int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t dela
 }
 
 /* ============================================================================
- * Вспомогательные функции
+ * Utility Functions
  * ============================================================================ */
 
+/**
+ * calculate_network_quality - Calculate network quality percentage
+ * @delay: Round-trip delay in microseconds
+ *
+ * Simple quality metric: 100% - delay(ms)
+ *
+ * Return: Quality 0-100
+ */
 uint8_t calculate_network_quality(uint64_t delay) {
     int64_t quality = 100 - (int64_t)(delay / 1000);
     if (quality < 0) return 0;

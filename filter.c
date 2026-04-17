@@ -2,6 +2,16 @@
 
 pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/**
+ * marx_add_sample_us - Add sample to MARX filter (RFC 5905 Section 10)
+ * @ts_ns: Timestamp in nanoseconds
+ * @delay_us: Round-trip delay in microseconds
+ * @offset_us: Clock offset in microseconds
+ *
+ * Adds a new clock sample to the MARX filter.
+ * Filter maintains up to MAX_SAMPLES (8) entries.
+ * Thread-safe via g_mutex.
+ */
 void marx_add_sample_us(uint64_t ts_ns, uint64_t delay_us, int64_t offset_us) {
     pthread_mutex_lock(&g_mutex);
 
@@ -17,6 +27,13 @@ void marx_add_sample_us(uint64_t ts_ns, uint64_t delay_us, int64_t offset_us) {
     pthread_mutex_unlock(&g_mutex);
 }
 
+/**
+ * marx_remove_sample - Remove sample from MARX filter by index
+ * @index: Index of sample to remove
+ *
+ * Removes sample and shifts remaining entries.
+ * Thread-safe via g_mutex.
+ */
 void marx_remove_sample(int index) {
     if (index >= 0 && index < g_sample_count) {
         pthread_mutex_lock(&g_mutex);
@@ -28,6 +45,16 @@ void marx_remove_sample(int index) {
     }
 }
 
+/**
+ * marx_median - Calculate median from array
+ * @arr: Pointer to array of values
+ * @count: Number of elements
+ *
+ * Uses simple bubble sort and returns median.
+ * For even count, returns average of two middle values.
+ *
+ * Return: Median value
+ */
 uint64_t marx_median(uint64_t *arr, int count) {
     if (arr == NULL || count <= 0) return 0;
 
@@ -44,6 +71,17 @@ uint64_t marx_median(uint64_t *arr, int count) {
     return (count % 2 == 0) ? arr[count / 2 - 1] : arr[count / 2];
 }
 
+/**
+ * marx_filter_outliers - Filter outliers using Modified Z-Score (MARX algorithm)
+ * @samples: Pointer to array of samples
+ * @count: Number of samples
+ * @k: Z-score threshold (typically 3)
+ *
+ * Uses Median Absolute Deviation (MAD) to filter outliers.
+ * Returns count of valid samples after filtering.
+ *
+ * Return: Number of valid samples after filtering
+ */
 int marx_filter_outliers(NtpSample *samples, int count, int k) {
     if (samples == NULL || count < 3) return count;
     if (count > MAX_SAMPLES) count = MAX_SAMPLES;
@@ -107,6 +145,14 @@ int marx_filter_outliers(NtpSample *samples, int count, int k) {
     return (filtered < original_count) ? filtered : original_count;
 }
 
+/**
+ * ntp_offset_jitter_us_locked - Calculate jitter from samples (WITH mutex held)
+ *
+ * Calculates RMS jitter from clock offset samples.
+ * Must be called with g_mutex locked.
+ *
+ * Return: Jitter in microseconds, or 0 if < 2 samples
+ */
 uint64_t ntp_offset_jitter_us_locked(void) {
     pthread_mutex_lock(&g_mutex);
 

@@ -1,5 +1,17 @@
 #include "ntpd.h"
 
+/**
+ * get_system_precision - Get system clock precision
+ *
+ * Returns clock precision as signed exponent (RFC 5905 Section 6):
+ * Negative values = sub-second (e.g., -20 = ~1 microsecond)
+ * Positive values = second+ (e.g., 4 = 16 seconds)
+ *
+ * Uses clock_getres(CLOCK_REALTIME) to determine resolution.
+ * Returns -20 on error (typical for modern systems).
+ *
+ * Return: Precision as log2(seconds), or -20 on error
+ */
 int8_t get_system_precision(void) {
     struct timespec ts;
     if (clock_getres(CLOCK_REALTIME, &ts) == 0) {
@@ -41,6 +53,18 @@ NtpTimestamp ntp_timestamp_now(void) {
     return t;
 }
 
+/**
+ * apply_time_correction_slew_or_step - Apply time correction using slew or step
+ * @offset_us: Time offset in microseconds
+ *
+ * Applies time correction according to RFC 5905 Section 11.3:
+ * - STEP (clock_settime): |offset| > 500ms (STEP_THRESHOLD_US)
+ * - SLEW (adjtime): |offset| <= 500ms
+ *
+ * Checks for integer overflow before applying correction.
+ *
+ * Return: 0 on success, -1 on error
+ */
 int apply_time_correction_slew_or_step(int64_t offset_us) {
     if (offset_us > STEP_THRESHOLD_US || offset_us < -STEP_THRESHOLD_US) {
         struct timespec now_ts;

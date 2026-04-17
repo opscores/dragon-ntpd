@@ -87,6 +87,20 @@ static int validate_extension_field_length(uint16_t length, size_t remaining) {
  * @param length Pointer to store field length
  * @return 0 on success, -1 on error
  */
+/**
+ * parse_extension_field_header - Parse NTP extension field header
+ * @data: Pointer to packet data
+ * @pos: Current position in packet
+ * @type: Pointer to store field type
+ * @length: Pointer to store field length
+ *
+ * Parses extension field header (RFC 5905 Section 7.5):
+ * - Bytes 0-1: Field type (big-endian)
+ * - Bytes 2-3: Field length (big-endian)
+ * - Length must be multiple of 4
+ *
+ * Return: 0 on success, -1 on error
+ */
 static int parse_extension_field_header(const uint8_t *data, size_t pos,
                                          uint16_t *type, uint16_t *length) {
     if (pos + 4 > 48) {
@@ -341,6 +355,17 @@ static int skip_extension_fields(const uint8_t *data, size_t size) {
     return (int)skipped;
 }
 
+/**
+ * parse_ntp_packet - Parse NTP packet from raw buffer
+ * @buffer: Pointer to raw packet data
+ * @size: Size of packet data in bytes
+ * @pkt: Pointer to NtpPacket structure to fill
+ *
+ * Parses NTP packet format (RFC 5905 Section 7.3) from raw buffer.
+ * Validates packet size and checks for KOD markers.
+ *
+ * Return: true on success, false on error
+ */
 bool parse_ntp_packet(const void *buffer, size_t size, NtpPacket *pkt) {
     if (buffer == NULL || pkt == NULL) {
         syslog(LOG_WARNING, "NULL указатель при парсинге пакета");

@@ -68,6 +68,13 @@ int create_udp_socket(int port) {
     return sock;
 }
 
+/**
+ * close_socket - Close socket if not cached
+ * @sock: Socket file descriptor to close
+ *
+ * Closes socket only if not g_sync_sock or g_tcp_sock.
+ * Protects cached sockets from accidental close.
+ */
 void close_socket(int sock) {
     pthread_mutex_lock(&g_tcp_sock_mutex);
     int tcp_sock_copy = g_tcp_sock;
