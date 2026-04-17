@@ -13,6 +13,10 @@
 
 #include "network.h"
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #ifndef SIZE_MAX
 #define SIZE_MAX ((size_t)-1)
 #endif
@@ -37,19 +41,29 @@ enum {
  */
 
 /**
+ * Get error message in thread-safe way
+ * Uses XSI strerror_r for POSIX compliance
+ * @param err Error number
+ * @return Error message string
+ */
+static inline const char *get_error_msg(int err)
+{
+	static char buf[256];
+
+	buf[0] = '\0';
+	strerror_r(err, buf, sizeof(buf));
+
+	return buf;
+}
+
+/**
  * Validate socket file descriptor
  * @param sock Socket file descriptor
  * @return 1 if valid, 0 otherwise
  */
 static inline int is_valid_socket(int sock)
 {
-	if (sock < 0)
-		return 0;
-
-	if (fcntl(sock, F_GETFD) < 0)
-		return 0;
-
-	return 1;
+	return (sock >= 0) ? 1 : 0;
 }
 
 /**
@@ -144,7 +158,7 @@ int create_network_socket(const NetworkConfig *config,
 		if (error_buf && error_buf_size > 0) {
 			snprintf(error_buf, error_buf_size,
 				 "create_network_socket: socket() failed: %s",
-				 strerror(errno));
+				 get_error_msg(errno));
 		}
 		return -1;
 	}
@@ -154,7 +168,7 @@ int create_network_socket(const NetworkConfig *config,
 		if (error_buf && error_buf_size > 0) {
 			snprintf(error_buf, error_buf_size,
 				 "create_network_socket: SO_REUSEADDR failed: %s",
-				 strerror(errno));
+				 get_error_msg(errno));
 		}
 		close(sock);
 		return -1;
@@ -168,7 +182,7 @@ int create_network_socket(const NetworkConfig *config,
 			if (error_buf && error_buf_size > 0) {
 				snprintf(error_buf, error_buf_size,
 					 "create_network_socket: IPV6_V6ONLY failed: %s",
-					 strerror(errno));
+					 get_error_msg(errno));
 			}
 			close(sock);
 			return -1;
@@ -185,7 +199,7 @@ int create_network_socket(const NetworkConfig *config,
 				if (error_buf && error_buf_size > 0) {
 					snprintf(error_buf, error_buf_size,
 						 "create_network_socket: set_network_buffers failed: %s",
-						 strerror(errno));
+						 get_error_msg(errno));
 				}
 				close(sock);
 				return -1;
@@ -199,7 +213,7 @@ int create_network_socket(const NetworkConfig *config,
 			if (error_buf && error_buf_size > 0) {
 				snprintf(error_buf, error_buf_size,
 					 "create_network_socket: network_init_multicast failed: %s",
-					 strerror(errno));
+					 get_error_msg(errno));
 			}
 			close(sock);
 			return -1;
@@ -430,6 +444,11 @@ ssize_t sendto_network(int sock, const void *buffer, size_t length,
 
 	if (length == 0 || length > (size_t)SSIZE_MAX) {
 		errno = EMSGSIZE;
+		return -1;
+	}
+
+	if (dest->family != AF_INET && dest->family != AF_INET6) {
+		errno = EAFNOSUPPORT;
 		return -1;
 	}
 
