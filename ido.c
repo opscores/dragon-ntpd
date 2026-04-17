@@ -165,6 +165,10 @@ bool ido_process_response(IdoState *ido_state, uint16_t ef_type, uint8_t ef_leng
  * Process I-DO extension field (unified interface)
  */
 bool ido_process(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t *ef_data) {
+    if (ido_state == NULL || ef_data == NULL) {
+        return false;
+    }
+
     /* Check if it's an Offer (server -> client) */
     if (ef_type == IDO_EF_TYPE_OFFER) {
         return ido_process_offer(ido_state, ef_type, ef_length, ef_data);
@@ -191,10 +195,16 @@ bool ido_process_skip(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length) 
     }
     
     /* Validate extension field length (min 4 bytes) */
-    if (ef_length < IDO_MIN_EF_LENGTH) {
+    if (ef_length < IDO_MIN_EF_LENGTH || ef_length > 48) {
+        syslog(LOG_WARNING, "I-DO: Invalid skip length %u", ef_length);
         return false;
     }
-    
+
+    /* Validate state pointer */
+    if (ido_state == NULL) {
+        return false;
+    }
+
     /* Update state machine for tracking */
     if (ef_type == IDO_EF_TYPE_OFFER) {
         ido_state->ido_offer_received = 1;
