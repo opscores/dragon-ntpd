@@ -18,6 +18,8 @@ NTPD is a C implementation of the Network Time Protocol (NTP) version 4 server t
 - **POSIX threads best practices** (pthread_detach, atomic flags, memory barriers)
 - **Command-line interface** with 15 flags
 - **systemd integration** for automatic startup
+- **Extension Fields Support** (RFC 5905 §2.1, §7.5)
+- **I-DO Capability Negotiation** (RFC 5905 §8.4)
 
 ## Architecture
 
@@ -43,8 +45,9 @@ NTPD is a C implementation of the Network Time Protocol (NTP) version 4 server t
 ├─────────────────────────────────────────────────────────┤
 │  Packet Parsing (ntp_packet.c)                          │
 │  ├─ NTP packet parsing (RFC 5905 §2.1)                  │
-│  ├─ Extension fields handling (Kiss-o'-Death)           │
-│  └─ Kiss-o'-Death marker detection                      │
+│  ├─ Extension fields handling (RFC 5905 §7.5)           │
+│  ├─ Kiss-o'-Death marker detection (RFC 5905 §8.3)      │
+│  └─ I-DO Capability Negotiation (RFC 5905 §8.4)         │
 ├─────────────────────────────────────────────────────────┤
 │  NTP Algorithms (ntp_algorithms.c)                      │
 │  ├─ Delay/Offset calculation                             │

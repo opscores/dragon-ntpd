@@ -19,6 +19,9 @@ int8_t g_local_precision = -20;
 int8_t g_local_poll = 4;
 int8_t g_peer_poll = 4;
 
+/* I-DO state (RFC 5905 Section 8.4) */
+IdoState g_ido_state;
+
 void cleanup_resources(void) {
     syslog(LOG_INFO, "Очистка ресурсов...");
 
@@ -29,6 +32,9 @@ void cleanup_resources(void) {
     /* Остановка потока обработки пэеров */
     stop_peer_thread();
     cleanup_peer_thread();
+
+    /* Очистка I-DO state (RFC 5905 Section 8.4) */
+    ido_state_cleanup(&g_ido_state);
 
     if (g_cli.pid_file != NULL) {
         if (unlink(g_cli.pid_file) == 0) {
@@ -237,6 +243,9 @@ int main(int argc, char *argv[]) {
         closelog();
         return EXIT_FAILURE;
     }
+
+    /* Инициализация I-DO state (RFC 5905 Section 8.4) */
+    ido_state_init(&g_ido_state);
 
     syslog(LOG_NOTICE, "=====================================================================");
     int sync_interval_1 = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;

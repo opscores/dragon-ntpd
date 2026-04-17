@@ -250,6 +250,36 @@ static int skip_extension_fields(const uint8_t *data, size_t size) {
         /* I-DO extension fields (RFC 5905 Section 8.4) */
         if (field_type == NTP_EF_I_DO_OFFER || field_type == NTP_EF_I_DO_RESPONSE) {
             syslog(LOG_DEBUG, "I-DO extension field detected at offset %zu", pos);
+
+            /* Initialize I-DO state if not initialized */
+            if (g_ido_state.ido_state == IDO_STATE_IDLE) {
+                ido_state_init(&g_ido_state);
+            }
+
+            /* Process I-DO Offer/Response */
+            if (field_type == NTP_EF_I_DO_OFFER) {
+                int ret_offer = process_ido_offer(data + 4, field_len - 4, &g_ido_state);
+                if (ret_offer < 0) {
+                    syslog(LOG_WARNING, "I-DO Offer processing failed");
+                }
+            } else if (field_type == NTP_EF_I_DO_RESPONSE) {
+                int ret_response = process_ido_response(data + 4, field_len - 4, &g_ido_state);
+                if (ret_response < 0) {
+                    syslog(LOG_WARNING, "I-DO Response processing failed");
+                }
+            }
+
+            /* Update state machine */
+            int ret_state = ido_state_machine(&g_ido_state, 
+                                              field_type == NTP_EF_I_DO_OFFER,
+                                              field_type == NTP_EF_I_DO_RESPONSE);
+            if (ret_state < 0) {
+                syslog(LOG_WARNING, "I-DO state machine error");
+            }
+
+            /* Log I-DO state */
+            ido_log_state();
+
             pos += field_len;
             skipped += field_len;
             continue;
@@ -406,9 +436,202 @@ void create_ntp_request(void *buffer, NtpTimestamp *xmit_out) {
 
 bool ntp_is_kod(const NtpPacket *pkt) {
     if (pkt == NULL) return false;
-    
+
     /* RFC 5905 Section 8.3: KOD in header
      * stratum=127 (0x7F) and leap=3 indicates KOD */
     uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
     return pkt->stratum == 127 && li == 3;
+}
+
+/* ============================================================================
+ * I-DO Capability Negotiation Functions (RFC 5905 Section 8.4)
+ * ============================================================================ */
+
+/**
+ * Initialize I-DO state
+ *
+ * @param state Pointer to IdoState
+ */
+void ido_state_init(IdoState *state) {
+    if (state == NULL) {
+        syslog(LOG_WARNING, "NULL указатель при инициализации I-DO state");
+        return;
+    }
+
+    memset(state, 0, sizeof(IdoState));
+    state->ido_state = IDO_STATE_IDLE;
+    state->ido_offer_received = 0;
+    state->ido_response_sent = 0;
+    state->ido_capabilities = 0;
+    state->ido_key_id = 0;
+    state->ido_enabled = false;
+    state->ido_authenticated = false;
+
+    syslog(LOG_DEBUG, "I-DO state initialized: state=%u", state->ido_state);
+}
+
+/**
+ * Cleanup I-DO state
+ *
+ * @param state Pointer to IdoState
+ */
+void ido_state_cleanup(IdoState *state) {
+    if (state == NULL) {
+        return;
+    }
+
+    memset(state, 0, sizeof(IdoState));
+    syslog(LOG_DEBUG, "I-DO state cleaned up");
+}
+
+/**
+ * Process I-DO Offer extension field (RFC 5905 Section 8.4)
+ *
+ * @param data Pointer to field data (after header)
+ * @param len Field length
+ * @param state Pointer to IdoState
+ * @return 0 on success, -1 on error
+ */
+int process_ido_offer(const uint8_t *data, size_t len, IdoState *state) {
+    if (data == NULL || state == NULL) {
+        return -1;
+    }
+
+    /* RFC 5905 Section 8.4: I-DO Offer minimum size is 4 bytes */
+    if (len < 4) {
+        syslog(LOG_WARNING, "I-DO Offer too small: %zu bytes (minimum 4)", len);
+        return -1;
+    }
+
+    /* Parse capability flags from Code field (byte 0) */
+    uint8_t code = data[0];
+
+    /* Check for reserved bits */
+    if (code & IDO_CAP_RESERVED) {
+        syslog(LOG_WARNING, "I-DO Offer contains reserved bits");
+        return -1;
+    }
+
+    /* Check if server offers I-DO capability */
+    if (code & IDO_CAP_OFFER) {
+        syslog(LOG_DEBUG, "I-DO Offer received with capability flags: 0x%02X", code);
+        state->ido_offer_received = 1;
+        state->ido_capabilities = code;
+    }
+
+    /* Transition state machine */
+    state->ido_state = IDO_STATE_OFFER_RECEIVED;
+
+    syslog(LOG_INFO, "I-DO Offer processed: state=%u, capabilities=0x%02X",
+           state->ido_state, state->ido_capabilities);
+
+    return 0;
+}
+
+/**
+ * Process I-DO Response extension field (RFC 5905 Section 8.4)
+ *
+ * @param data Pointer to field data (after header)
+ * @param len Field length
+ * @param state Pointer to IdoState
+ * @return 0 on success, -1 on error
+ */
+int process_ido_response(const uint8_t *data, size_t len, IdoState *state) {
+    if (data == NULL || state == NULL) {
+        return -1;
+    }
+
+    /* RFC 5905 Section 8.4: I-DO Response minimum size is 4 bytes */
+    if (len < 4) {
+        syslog(LOG_WARNING, "I-DO Response too small: %zu bytes (minimum 4)", len);
+        return -1;
+    }
+
+    /* Parse capability flags from Code field (byte 0) */
+    uint8_t code = data[0];
+
+    /* Check for reserved bits */
+    if (code & IDO_CAP_RESERVED) {
+        syslog(LOG_WARNING, "I-DO Response contains reserved bits");
+        return -1;
+    }
+
+    /* Check if client responds with I-DO capability */
+    if (code & IDO_CAP_RESPONSE) {
+        syslog(LOG_DEBUG, "I-DO Response received with capability flags: 0x%02X", code);
+        state->ido_response_sent = 1;
+        state->ido_capabilities = code;
+    }
+
+    /* Transition state machine */
+    state->ido_state = IDO_STATE_RESPONSE_SENT;
+
+    syslog(LOG_INFO, "I-DO Response processed: state=%u, capabilities=0x%02X",
+           state->ido_state, state->ido_capabilities);
+
+    return 0;
+}
+
+/**
+ * I-DO Capability Negotiation State Machine (RFC 5905 Section 8.4)
+ *
+ * State transitions:
+ * - IDLE → OFFER_RECEIVED: I-DO Offer received from server
+ * - OFFER_RECEIVED → RESPONSE_SENT: Send I-DO Response to server
+ * - RESPONSE_SENT → AUTHENTICATED: Authentication established
+ * - Any state → REJECTED: I-DO negotiation failed
+ *
+ * @param state Pointer to IdoState
+ * @param offer_received I-DO Offer received flag
+ * @param response_sent I-DO Response sent flag
+ * @return 0 on success, -1 on error
+ */
+int ido_state_machine(IdoState *state, bool offer_received, bool response_sent) {
+    if (state == NULL) {
+        return -1;
+    }
+
+    /* Reset state if offer received */
+    if (offer_received) {
+        state->ido_state = IDO_STATE_OFFER_RECEIVED;
+        state->ido_offer_received = 1;
+        syslog(LOG_DEBUG, "I-DO state machine: IDLE → OFFER_RECEIVED");
+    }
+
+    /* If offer received and response sent, transition to authenticated */
+    if (state->ido_offer_received && response_sent) {
+        state->ido_state = IDO_STATE_AUTHENTICATED;
+        state->ido_authenticated = true;
+        syslog(LOG_DEBUG, "I-DO state machine: OFFER_RECEIVED → AUTHENTICATED");
+    }
+
+    /* If response sent but no offer received, transition to rejected */
+    if (response_sent && !state->ido_offer_received) {
+        state->ido_state = IDO_STATE_REJECTED;
+        syslog(LOG_WARNING, "I-DO state machine: RESPONSE_SENT → REJECTED (no offer received)");
+    }
+
+    return 0;
+}
+
+/**
+ * Check if I-DO authentication is established
+ *
+ * @return true if authenticated, false otherwise
+ */
+bool ido_is_authenticated(void) {
+    return g_ido_state.ido_authenticated;
+}
+
+/**
+ * Log I-DO state
+ */
+void ido_log_state(void) {
+    syslog(LOG_DEBUG, "I-DO state: state=%u, offer_received=%u, response_sent=%u, "
+           "capabilities=0x%02X, authenticated=%s",
+           g_ido_state.ido_state,
+           g_ido_state.ido_offer_received,
+           g_ido_state.ido_response_sent,
+           g_ido_state.ido_capabilities,
+           g_ido_state.ido_authenticated ? "true" : "false");
 }
