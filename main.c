@@ -132,12 +132,13 @@ void signal_handler(int sig) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc > 1) {
-        if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
+    /* Check for help and version flags in any position */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             exit(EXIT_SUCCESS);
         }
-        if (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0) {
+        if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
             print_version();
             exit(EXIT_SUCCESS);
         }
