@@ -42,7 +42,7 @@ int create_udp_socket(int port) {
     if (g_cli.interface != NULL) {
         struct ifreq ifr;
         memset(&ifr, 0, sizeof(ifr));
-        strncpy(ifr.ifr_name, g_cli.interface, IFNAMSZ - 1);
+        snprintf(ifr.ifr_name, IFNAMSZ, "%s", g_cli.interface);
 
         if (ioctl(sock, SIOCGIFADDR, &ifr) == 0) {
             struct sockaddr_in *ifa_addr = (struct sockaddr_in *)&ifr.ifr_addr;
@@ -125,21 +125,28 @@ static void *handle_peer_request_thread(void *arg) {
     const char *ip = data->ip;
     const char *port = data->port;
 
-    syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен", ip, port);
+    syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен",
+           ip[0] ? ip : "unknown", port[0] ? port : "unknown");
 
-    if (buffer == NULL || ip == NULL || port == NULL) {
-        syslog(LOG_WARNING, "NULL указатель при обработке запроса клиента");
+    if (buffer == NULL || size < 48) {
+        syslog(LOG_WARNING, "Некорректные параметры запроса");
+        free(data->buffer);
+        free(data);
         return NULL;
     }
 
-    if (size < 48) {
-        syslog(LOG_WARNING, "Запрос клиента слишком мал: %zu байт", size);
+    if (ip[0] == '\0' || port[0] == '\0') {
+        syslog(LOG_WARNING, "Пустой IP или порт");
+        free(data->buffer);
+        free(data);
         return NULL;
     }
 
     NtpPacket pkt;
     if (!parse_ntp_packet(buffer, size, &pkt)) {
         syslog(LOG_WARNING, "Ошибка парсинга запроса клиента");
+        free(data->buffer);
+        free(data);
         return NULL;
     }
 
@@ -241,10 +248,12 @@ static void *handle_peer_request_thread(void *arg) {
     struct sockaddr_in client_addr;
     memset(&client_addr, 0, sizeof(client_addr));
     client_addr.sin_family = AF_INET;
+
+    errno = 0;
     char *endp = NULL;
     unsigned long port_ul = strtoul(port, &endp, 10);
 
-    if (endp == port || *endp != '\0' || port_ul > 65535UL) {
+    if (endp == port || *endp != '\0' || errno == ERANGE || port_ul > 65535UL) {
         syslog(LOG_WARNING, "Невалидный порт от %s:%s", ip, port);
         return NULL;
     }
@@ -273,6 +282,9 @@ static void *handle_peer_request_thread(void *arg) {
     close(sock);
 
     syslog(LOG_INFO, "Поток обработки запроса от %s:%s завершён", ip, port);
+
+    free(data->buffer);
+    free(data);
     return NULL;
 }
 
@@ -294,19 +306,27 @@ void handle_client_request(const void *buffer, size_t size,
         return;
     }
 
-    data->buffer = buffer;
+    memset(data, 0, sizeof(*data));
+    data->buffer = malloc(size);
+    if (data->buffer == NULL) {
+        syslog(LOG_ERR, "Ошибка выделения памяти для буфера");
+        free(data);
+        return;
+    }
+    memcpy(data->buffer, buffer, size);
     data->size = size;
-    data->ip = ip;
-    data->port = port;
+
+    snprintf(data->ip, sizeof(data->ip), "%s", ip ? ip : "");
+    snprintf(data->port, sizeof(data->port), "%s", port ? port : "");
 
     pthread_t thread;
     if (pthread_create(&thread, NULL, handle_peer_request_thread, data) != 0) {
         syslog(LOG_ERR, "Ошибка создания потока обработки запроса: %s", strerror(errno));
+        free(data->buffer);
         free(data);
         return;
     }
 
-    /* Очистка структуры после создания потока (не освобождать в потоке!) */
     pthread_detach(thread);
     free(data);
 
@@ -314,7 +334,11 @@ void handle_client_request(const void *buffer, size_t size,
 }
 
 int get_tcp_socket(void) {
-    return g_tcp_sock;
+    int sock_copy;
+    pthread_mutex_lock(&g_tcp_sock_mutex);
+    sock_copy = g_tcp_sock;
+    pthread_mutex_unlock(&g_tcp_sock_mutex);
+    return sock_copy;
 }
 
 int start_tcp_listener(void) {

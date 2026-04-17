@@ -111,10 +111,10 @@ typedef struct {
 } PeerState;
 
 typedef struct {
-    const void *buffer;
+    void *buffer;
     size_t size;
-    const char *ip;
-    const char *port;
+    char ip[INET_ADDRSTRLEN];
+    char port[16];
 } PeerRequestData;
 
 typedef struct {
