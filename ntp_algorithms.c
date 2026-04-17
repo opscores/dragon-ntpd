@@ -1,10 +1,25 @@
 #include "ntpd.h"
 
+#define NS_PER_SEC 1000000000LL
+
 int64_t ntp_timestamp_to_ns(const NtpTimestamp *t) {
-    if (t == NULL) return 0;
+    if (t == NULL)
+        return 0;
+
     int64_t sec = (int64_t)t->sec - (int64_t)NTP_UNIX_EPOCH_DELTA;
+
+    /* Check for overflow before multiplication */
+    if (sec > (INT64_MAX / NS_PER_SEC) - 1) {
+        syslog(LOG_WARNING, "NTP timestamp too large, clamping to INT64_MAX");
+        return INT64_MAX;
+    }
+    if (sec < (INT64_MIN / NS_PER_SEC) + 1) {
+        syslog(LOG_WARNING, "NTP timestamp too small, clamping to INT64_MIN");
+        return INT64_MIN;
+    }
+
     int64_t nsec = (int64_t)(((uint64_t)t->frac * 1000000000ULL) >> 32);
-    return sec * 1000000000LL + nsec;
+    return sec * NS_PER_SEC + nsec;
 }
 
 bool calculate_delay_offset(const NtpTimestamp *t1,
@@ -63,30 +78,37 @@ uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum) {
     return (uint8_t)s;
 }
 
-uint8_t compute_system_offset(int8_t *offsets, int count, int *best_idx) {
+uint8_t compute_system_offset(int64_t *offsets, int count, int *best_idx) {
     if (count < 2 || best_idx == NULL) {
-        if (best_idx) *best_idx = 0;
+        if (best_idx) {
+            *best_idx = 0;
+        }
         return count > 0 ? 0 : 16;
     }
 
+    /* Bubble sort - not optimal but simple and correct */
     for (int i = 0; i < count - 1; i++) {
         for (int j = 0; j < count - i - 1; j++) {
             if (offsets[j] > offsets[j + 1]) {
-                int8_t tmp = offsets[j];
+                int64_t tmp = offsets[j];
                 offsets[j] = offsets[j + 1];
                 offsets[j + 1] = tmp;
             }
         }
     }
 
-    int8_t median = offsets[count / 2];
+    int64_t median = offsets[count / 2];
     int64_t total = 0;
     int used = 0;
+
+    /* RFC 5905 Section 11.2.1: filter outliers within 500ms of median */
     for (int i = 0; i < count; i++) {
-        int8_t diff = offsets[i] - median;
-        if (diff < 0) diff = -diff;
-        /* diff имеет тип int8_t, диапазон -128..127, поэтому diff < 500 всегда истинно */
-        if (diff < 127) {
+        int64_t diff = offsets[i] - median;
+        if (diff < 0) {
+            diff = -diff;
+        }
+        /* Filter: only use offsets within 500ms of median */
+        if (diff < 500000) {
             total += offsets[i];
             used++;
         }
@@ -94,51 +116,58 @@ uint8_t compute_system_offset(int8_t *offsets, int count, int *best_idx) {
 
     if (used > 0) {
         *best_idx = 0;
-        return (uint8_t)(total / used);
+        int64_t result = total / used;
+        /* Clamp to valid range */
+        if (result > 127) {
+            result = 127;
+        }
+        if (result < -128) {
+            result = -128;
+        }
+        return (uint8_t)(result & 0xFF);
     }
 
     *best_idx = 0;
-    return (uint8_t)median;
+    return (uint8_t)(median & 0xFF);
 }
 
 uint32_t ntp_u16_16_from_us(uint64_t us) {
-    if (us > (UINT64_MAX / 65536ULL)) return UINT32_MAX;
+    /* Prevent overflow in multiplication: check us * 65536 <= UINT64_MAX */
+    if (us > (UINT64_MAX / 65536ULL)) {
+        return UINT32_MAX;
+    }
     uint64_t v = (us * 65536ULL) / 1000000ULL;
-    return (v > UINT32_MAX) ? UINT32_MAX : (uint32_t)v;
+    if (v > UINT32_MAX) {
+        return UINT32_MAX;
+    }
+    return (uint32_t)v;
 }
 
 uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us) {
-    /* Защита от race condition с g_last_dispersion_update */
-    pthread_mutex_lock(&g_mutex);
-    time_t last_update = g_last_dispersion_update;
-    pthread_mutex_unlock(&g_mutex);
+    time_t now = time(NULL);
 
-    if (last_update == 0) {
-        g_last_dispersion_update = time(NULL);
+    pthread_mutex_lock(&g_mutex);
+
+    if (g_last_dispersion_update == 0) {
+        g_last_dispersion_update = now;
+        pthread_mutex_unlock(&g_mutex);
         return current_disp;
     }
 
-    /* Вычисление elapsed с защитой от race condition */
-    time_t now = time(NULL);
-    int64_t elapsed_sec = (int64_t)now - (int64_t)last_update;
-    if (elapsed_sec < 0) elapsed_sec = 0;
+    int64_t elapsed_sec = (int64_t)now - (int64_t)g_last_dispersion_update;
+    if (elapsed_sec < 0) {
+        elapsed_sec = 0;
+    }
 
-    /* Вычисление phi_dispersion с защитой от overflow */
-    /* PHI = 15, elapsed_sec >= 0 */
-    double phi_dispersion = ((double)(int64_t)PHI * (double)elapsed_sec) / 1000000.0;
+    double phi_dispersion = ((double)PHI * (double)elapsed_sec) / 1000000.0;
 
-    /* Проверка на overflow перед сложением */
-    /* Максимальное значение UINT32_MAX = 4294967295 */
-    /* Проверка: phi_dispersion + disp_us + jitter_us <= UINT32_MAX */
-    uint64_t disp_us = offset_us;  /* offset_us уже unsigned, берём абсолютное значение */
+    uint64_t disp_us = offset_us;
     uint64_t jitter_us_val = jitter_us;
 
-    /* Проверка: phi_dispersion + disp_us <= UINT32_MAX */
     if (disp_us > (uint64_t)UINT32_MAX) {
         disp_us = UINT32_MAX;
     }
 
-    /* Проверка: phi_dispersion + disp_us + jitter_us <= UINT32_MAX */
     double new_disp;
     if (phi_dispersion > (double)UINT32_MAX - (double)disp_us - (double)jitter_us_val) {
         new_disp = (double)UINT32_MAX;
@@ -147,6 +176,8 @@ uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint6
     }
 
     g_last_dispersion_update = now;
+    pthread_mutex_unlock(&g_mutex);
+
     return ntp_u16_16_from_us((uint64_t)new_disp);
 }
 
@@ -157,10 +188,18 @@ int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t dela
         new_poll = peer_poll;
     }
 
-    if (delay_us > 100000 || offset_us > 50000 || offset_us < -50000) {
-        if (new_poll < 12) new_poll++;
-    } else if (delay_us < 10000 && offset_us > -10000 && offset_us < 10000) {
-        if (new_poll > 4) new_poll--;
+    if (delay_us > POLL_DELAY_HIGH_THRESHOLD_US ||
+        offset_us > (int64_t)POLL_OFFSET_HIGH_THRESHOLD_US ||
+        offset_us < -(int64_t)POLL_OFFSET_HIGH_THRESHOLD_US) {
+        if (new_poll < POLL_INTERVAL_MAX) {
+            new_poll++;
+        }
+    } else if (delay_us < POLL_DELAY_LOW_THRESHOLD_US &&
+               offset_us > -(int64_t)POLL_OFFSET_LOW_THRESHOLD_US &&
+               offset_us < (int64_t)POLL_OFFSET_LOW_THRESHOLD_US) {
+        if (new_poll > POLL_INTERVAL_MIN) {
+            new_poll--;
+        }
     }
 
     return new_poll;

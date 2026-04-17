@@ -51,6 +51,12 @@
 #define MARX_K 3
 #define PHI 15
 #define MAXDIST 1000000  /* RFC 5905 Section 11.3: max distance threshold (1 sec in us) */
+#define POLL_DELAY_HIGH_THRESHOLD_US 100000   /* High delay threshold (100ms) */
+#define POLL_DELAY_LOW_THRESHOLD_US 10000    /* Low delay threshold (10ms) */
+#define POLL_OFFSET_HIGH_THRESHOLD_US 50000  /* High offset threshold (50ms) */
+#define POLL_OFFSET_LOW_THRESHOLD_US 10000   /* Low offset threshold (10ms) */
+#define POLL_INTERVAL_MIN 4                   /* Minimum poll interval (16 sec) */
+#define POLL_INTERVAL_MAX 12                   /* Maximum poll interval (4096 sec) */
 #define DEFAULT_CONFIG_FILE "/etc/time_sync/servers.conf"
 #define DEFAULT_PID_FILE "/var/run/ntpd.pid"
 #define DEFAULT_LOG_FILE "/var/log/ntpd.log"
@@ -174,7 +180,7 @@ bool calculate_delay_offset(const NtpTimestamp *t1, const NtpTimestamp *t2,
                              uint64_t *delay_us, int64_t *offset_us);
 bool handle_leap_indicator(uint8_t li);
 uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum);
-uint8_t compute_system_offset(int8_t *offsets, int count, int *best_idx);
+uint8_t compute_system_offset(int64_t *offsets, int count, int *best_idx);
 uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us);
 int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us);
 uint32_t ntp_u16_16_from_us(uint64_t us);
