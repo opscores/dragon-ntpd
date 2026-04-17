@@ -6,6 +6,7 @@ NtpSample g_samples[MAX_SAMPLES];
 int g_sample_count = 0;
 
 bool g_time_synced = false;
+static volatile sig_atomic_t g_shutdown_requested = 0;
 uint8_t g_local_stratum = 16;
 uint32_t g_local_ref_id = 0x4C4F434CUL;
 NtpTimestamp g_local_ref_ts = {0, 0};
@@ -62,7 +63,7 @@ int load_server_config(void) {
     const char *config_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
     FILE *fp = fopen(config_path, "r");
     if (!fp) {
-        syslog(LOG_WARNING, "Файл конфигурации не найден: %s", config_path);
+        syslog(LOG_WARNING, "Конфигурационный файл не найден: %s", config_path);
         return 0;
     }
 
@@ -71,7 +72,8 @@ int load_server_config(void) {
     char port_str[16] = "123";
 
     while (fgets(line, sizeof(line), fp)) {
-        if (line[0] == '\n' || line[0] == '#' || line[0] == '\r') continue;
+        if (line[0] == '\n' || line[0] == '#' || line[0] == '\r')
+            continue;
 
         char *colon = strchr(line, ':');
         if (!colon) {
@@ -89,39 +91,60 @@ int load_server_config(void) {
             syslog(LOG_WARNING, "IP-адрес слишком длинный в строке: %s", line);
             continue;
         }
-        strncpy(ip_str, line, ip_len);
-        ip_str[ip_len] = '\0';
+
+        memset(ip_str, 0, sizeof(ip_str));
+        memcpy(ip_str, line, ip_len);
 
         size_t port_len = strlen(colon + 1);
         if (port_len >= sizeof(port_str) - 1) {
             syslog(LOG_WARNING, "Порт слишком длинный в строке: %s", line);
             continue;
         }
-        strncpy(port_str, colon + 1, sizeof(port_str) - 1);
-        port_str[sizeof(port_str) - 1] = '\0';
+        memset(port_str, 0, sizeof(port_str));
+        memcpy(port_str, colon + 1, port_len);
 
-        g_server_count++;
-        void *temp = realloc(g_servers, (size_t)g_server_count * sizeof(ServerConfig));
-        if (temp == NULL) {
-            syslog(LOG_CRIT, "Ошибка выделения памяти для списка серверов");
+        char *new_ip = strdup(ip_str);
+        char *new_port = strdup(port_str);
+        if (!new_ip || !new_port) {
+            syslog(LOG_CRIT, "Ошибка выделения памяти для IP/Port");
+            free(new_ip);
+            free(new_port);
+            for (int j = 0; j < g_server_count; j++) {
+                free(g_servers[j].ip);
+                free(g_servers[j].port);
+            }
+            free(g_servers);
+            g_servers = NULL;
+            g_server_count = 0;
             fclose(fp);
             return 0;
         }
-        g_servers = (ServerConfig *)temp;
+
+        ServerConfig *temp = realloc(g_servers,
+                    (size_t)(g_server_count + 1) * sizeof(ServerConfig));
+        if (!temp) {
+            syslog(LOG_CRIT, "Ошибка выделения памяти для списка серверов");
+            free(new_ip);
+            free(new_port);
+            for (int j = 0; j < g_server_count; j++) {
+                free(g_servers[j].ip);
+                free(g_servers[j].port);
+            }
+            free(g_servers);
+            g_servers = NULL;
+            g_server_count = 0;
+            fclose(fp);
+            return 0;
+        }
+        g_servers = temp;
 
         pthread_mutex_lock(&g_mutex);
-        g_servers[g_server_count - 1].ip = strdup(ip_str);
-        g_servers[g_server_count - 1].port = strdup(port_str);
-        g_servers[g_server_count - 1].next_allowed_sync = 0;
-
-        if (!g_servers[g_server_count - 1].ip || !g_servers[g_server_count - 1].port) {
-            syslog(LOG_CRIT, "Ошибка выделения памяти для IP/Port");
-            fclose(fp);
-            pthread_mutex_unlock(&g_mutex);
-            return 0;
-        }
+        g_servers[g_server_count].ip = new_ip;
+        g_servers[g_server_count].port = new_port;
+        g_servers[g_server_count].next_allowed_sync = 0;
         pthread_mutex_unlock(&g_mutex);
 
+        g_server_count++;
         syslog(LOG_INFO, "Конфигурация загружена: %s:%s", ip_str, port_str);
     }
 
@@ -129,9 +152,36 @@ int load_server_config(void) {
     return g_server_count;
 }
 
-void signal_handler(int sig) {
-    syslog(LOG_INFO, "Получен сигнал %d, завершение...", sig);
-    exit(EXIT_SUCCESS);
+int apply_user_privileges(const char *username)
+{
+    if (username == NULL)
+        return 0;
+
+    struct passwd *pw = getpwnam(username);
+    if (pw == NULL) {
+        syslog(LOG_ERR, "Пользователь не найден: %s", username);
+        return -1;
+    }
+
+    if (setgid(pw->pw_gid) != 0) {
+        syslog(LOG_ERR, "Не удалось setgid(%s): %s", username, strerror(errno));
+        return -1;
+    }
+
+    if (setuid(pw->pw_uid) != 0) {
+        syslog(LOG_ERR, "Не удалось setuid(%s): %s", username, strerror(errno));
+        return -1;
+    }
+
+    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)",
+           username, (int)pw->pw_uid, (int)pw->pw_gid);
+    return 0;
+}
+
+static void signal_handler(int sig) {
+    (void)sig;
+    g_shutdown_requested = 1;
+    syslog(LOG_INFO, "Получен сигнал завершения");
 }
 
 int main(int argc, char *argv[]) {
@@ -209,34 +259,8 @@ int main(int argc, char *argv[]) {
         }
 
         if (g_cli.run_user != NULL) {
-            struct passwd *pw = getpwnam(g_cli.run_user);
-            if (pw != NULL) {
-                if (setgid(pw->pw_gid) != 0) {
-                    syslog(LOG_ERR, "Не удалось setgid(%s): %s", g_cli.run_user, strerror(errno));
-                } else if (setuid(pw->pw_uid) != 0) {
-                    syslog(LOG_ERR, "Не удалось setuid(%s): %s", g_cli.run_user, strerror(errno));
-                } else {
-                    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)",
-                         g_cli.run_user, (int)pw->pw_uid, (int)pw->pw_gid);
-                }
-            } else {
-                syslog(LOG_ERR, "Пользователь не найден: %s", g_cli.run_user);
-            }
-        }
-    } else {
-        if (g_cli.run_user != NULL) {
-            struct passwd *pw = getpwnam(g_cli.run_user);
-            if (pw != NULL) {
-                if (setgid(pw->pw_gid) != 0) {
-                    syslog(LOG_ERR, "Не удалось setgid(%s): %s", g_cli.run_user, strerror(errno));
-                } else if (setuid(pw->pw_uid) != 0) {
-                    syslog(LOG_ERR, "Не удалось setuid(%s): %s", g_cli.run_user, strerror(errno));
-                } else {
-                    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)",
-                         g_cli.run_user, (int)pw->pw_uid, (int)pw->pw_gid);
-                }
-            } else {
-                syslog(LOG_ERR, "Пользователь не найден: %s", g_cli.run_user);
+            if (apply_user_privileges(g_cli.run_user) != 0) {
+                syslog(LOG_ERR, "Не удалось применить привилегии пользователя");
             }
         }
     }
@@ -289,7 +313,7 @@ int main(int argc, char *argv[]) {
         syslog(LOG_WARNING, "Не удалось создать TCP сокет для ntpq");
     }
 
-    while (1) {
+    while (!g_shutdown_requested) {
         syslog(LOG_INFO, "--- Начинается цикл синхронизации времени ---");
 
         bool all_success = true;
@@ -305,7 +329,7 @@ int main(int argc, char *argv[]) {
             int rc = sync_ntp_time(g_servers[i].ip, g_servers[i].port);
             if (rc != 0) {
                 all_success = false;
-                g_servers[i].next_allowed_sync = now + 15;
+                g_servers[i].next_allowed_sync = now + SYNC_RETRY_INTERVAL_SEC;
             } else {
                 g_servers[i].next_allowed_sync = 0;
             }

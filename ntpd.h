@@ -51,6 +51,8 @@
 #define DEFAULT_CONFIG_FILE "/etc/time_sync/servers.conf"
 #define DEFAULT_PID_FILE "/var/run/ntpd.pid"
 #define DEFAULT_LOG_FILE "/var/log/ntpd.log"
+#define SYNC_RETRY_INTERVAL_SEC 15
+#define DEFAULT_NTPQ_PORT 323
 
 #define NTP_LI_MASK   0xC0
 #define NTP_VN_MASK   0x38
@@ -155,6 +157,7 @@ void print_version(void);
 int parse_arguments(int argc, char *argv[]);
 int load_server_config(void);
 void cleanup_resources(void);
+int apply_user_privileges(const char *username);
 
 uint32_t read_u32be(const uint8_t *p);
 void write_u32be(uint8_t *p, uint32_t v);

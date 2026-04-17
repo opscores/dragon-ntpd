@@ -2,10 +2,9 @@
 #include <stdlib.h>
 #include <sys/select.h>
 
-#define NTPQ_PORT 323
-
 int g_sync_sock = -1;
 static int g_tcp_sock = -1;
+static pthread_mutex_t g_tcp_sock_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int get_sync_socket(void) {
     if (g_sync_sock >= 0) return g_sync_sock;
@@ -69,7 +68,11 @@ int create_udp_socket(int port) {
 }
 
 void close_socket(int sock) {
-    if (sock >= 0 && sock != g_sync_sock && sock != g_tcp_sock) {
+    pthread_mutex_lock(&g_tcp_sock_mutex);
+    int tcp_sock_copy = g_tcp_sock;
+    pthread_mutex_unlock(&g_tcp_sock_mutex);
+
+    if (sock >= 0 && sock != g_sync_sock && sock != tcp_sock_copy) {
         close(sock);
     }
 }
@@ -315,15 +318,23 @@ int get_tcp_socket(void) {
 }
 
 int start_tcp_listener(void) {
-    g_tcp_sock = create_tcp_socket(NTPQ_PORT);
+    pthread_mutex_lock(&g_tcp_sock_mutex);
+    if (g_tcp_sock >= 0) {
+        pthread_mutex_unlock(&g_tcp_sock_mutex);
+        return g_tcp_sock;
+    }
+    g_tcp_sock = create_tcp_socket(DEFAULT_NTPQ_PORT);
+    pthread_mutex_unlock(&g_tcp_sock_mutex);
     return g_tcp_sock;
 }
 
 void stop_tcp_listener(void) {
+    pthread_mutex_lock(&g_tcp_sock_mutex);
     if (g_tcp_sock >= 0) {
         close(g_tcp_sock);
         g_tcp_sock = -1;
     }
+    pthread_mutex_unlock(&g_tcp_sock_mutex);
 }
 
 static void handle_ntpq_request(int client_fd) {

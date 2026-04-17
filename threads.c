@@ -445,7 +445,7 @@ static void *clock_thread_main(void *arg) {
     atomic_store_explicit(&g_clock_thread_running, 1, memory_order_release);
 
     /* Основной цикл */
-    struct timespec ts;
+    struct timespec deadline;
     while (atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) {
         /* Получение текущего времени */
         struct timeval tv;
@@ -470,13 +470,22 @@ static void *clock_thread_main(void *arg) {
         int correction = apply_time_correction_slew_or_step(offset_us);
         update_system_clock(offset_us, correction);
 
-        /* Установка таймера */
-        ts.tv_sec = ctx->interval_ms / 1000;
-        ts.tv_nsec = (ctx->interval_ms % 1000) * 1000000;
+        /* Установка таймера - используем абсолютное время */
+        if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) {
+            syslog(LOG_WARNING, "Ошибка получения времени: %s", strerror(errno));
+            sleep((unsigned int)(ctx->interval_ms / 1000));
+            continue;
+        }
+        deadline.tv_sec += ctx->interval_ms / 1000;
+        deadline.tv_nsec += (ctx->interval_ms % 1000) * 1000000;
+        if (deadline.tv_nsec >= 1000000000L) {
+            deadline.tv_sec += 1;
+            deadline.tv_nsec -= 1000000000L;
+        }
 
         pthread_mutex_lock(&g_clock_ctx.clock_mutex);
         int rc = pthread_cond_timedwait(&g_clock_ctx.clock_cond,
-                                        &g_clock_ctx.clock_mutex, &ts);
+                                        &g_clock_ctx.clock_mutex, &deadline);
         pthread_mutex_unlock(&g_clock_ctx.clock_mutex);
 
         if (rc == ETIMEDOUT) {
