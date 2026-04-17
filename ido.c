@@ -20,6 +20,7 @@
 #include "ido.h"
 #include <stdio.h>
 #include <string.h>
+#include <syslog.h>
 
 /* State machine event types */
 #define IDO_EVENT_OFFER_RECEIVED    (1)
@@ -88,24 +89,27 @@ bool ido_process_offer(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length,
     }
     
     /* Validate extension field length (min 4 bytes) */
-    if (ef_length < IDO_MIN_EF_LENGTH) {
+    if (ef_length < IDO_MIN_EF_LENGTH || ef_length > 48) {
+        syslog(LOG_WARNING, "I-DO: Invalid offer length %u", ef_length);
         return false;
     }
-    
+
     /* Extract capability flags from extension field data */
     if (ef_data != NULL && ef_length >= 4) {
         /* Capability flags are in the first byte */
         uint8_t flags = ef_data[0];
-        ido_state->ido_capabilities = flags & 0x07;  /* Only lower 3 bits */
+        if (ef_length > 0) {
+            ido_state->ido_capabilities = flags & 0x07;  /* Only lower 3 bits */
+        }
     }
-    
+
     /* Transition state machine */
     ido_state->ido_offer_received = 1;
     ido_state->ido_state = IDO_STATE_OFFER_RECEIVED;
-    
+
     /* Log state transition */
-    printf("[I-DO] Offer received, state: %s\n", ido_state_name(ido_state->ido_state));
-    
+    syslog(LOG_INFO, "I-DO: Offer received, state: %s", ido_state_name(ido_state->ido_state));
+
     return true;
 }
 
@@ -132,25 +136,28 @@ bool ido_process_response(IdoState *ido_state, uint16_t ef_type, uint8_t ef_leng
     }
     
     /* Validate extension field length (min 4 bytes) */
-    if (ef_length < IDO_MIN_EF_LENGTH) {
+    if (ef_length < IDO_MIN_EF_LENGTH || ef_length > 48) {
+        syslog(LOG_WARNING, "I-DO: Invalid response length %u", ef_length);
         return false;
     }
-    
+
     /* Extract capability flags from extension field data */
     if (ef_data != NULL && ef_length >= 4) {
         /* Capability flags are in the first byte */
         uint8_t flags = ef_data[0];
-        ido_state->ido_capabilities = flags & 0x07;  /* Only lower 3 bits */
+        if (ef_length > 0) {
+            ido_state->ido_capabilities = flags & 0x07;  /* Only lower 3 bits */
+        }
     }
-    
+
     /* Transition state machine */
     ido_state->ido_response_sent = 1;
     ido_state->ido_state = IDO_STATE_AUTHENTICATED;
     ido_state->ido_authenticated = 1;
-    
+
     /* Log state transition */
-    printf("[I-DO] Response sent, state: %s\n", ido_state_name(ido_state->ido_state));
-    
+    syslog(LOG_INFO, "I-DO: Response sent, state: %s", ido_state_name(ido_state->ido_state));
+
     return true;
 }
 
@@ -256,12 +263,13 @@ uint8_t ido_state_machine(IdoState *ido_state, uint8_t event) {
     }
     
     if (new_state != ido_state->ido_state) {
+        uint8_t prev_state = ido_state->ido_state;
         ido_state->ido_state = new_state;
-        printf("[I-DO] State transition: %s → %s\n", 
-               ido_state_name(ido_state->ido_state - 1),
+        syslog(LOG_INFO, "I-DO: State transition: %s → %s",
+               ido_state_name(prev_state),
                ido_state_name(new_state));
     }
-    
+
     return new_state;
 }
 
@@ -283,9 +291,9 @@ void ido_log_state(const IdoState *ido_state) {
     if (ido_state == NULL) {
         return;
     }
-    
-    printf("[I-DO] State: %s, Offer: %s, Response: %s, "
-           "Capabilities: 0x%02X, Authenticated: %s\n",
+
+    syslog(LOG_INFO, "I-DO: State: %s, Offer: %s, Response: %s, "
+           "Capabilities: 0x%02X, Authenticated: %s",
            ido_state_name(ido_state->ido_state),
            ido_state->ido_offer_received ? "yes" : "no",
            ido_state->ido_response_sent ? "yes" : "no",
