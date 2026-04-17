@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: BSD-3-Clause
-/*
+/* SPDX-License-Identifier: BSD-3-Clause
  * network.c - Network layer for NTP daemon (IPv4/IPv6 dual-stack)
  *
  * Implements POSIX-compliant network functions with:
@@ -24,10 +23,12 @@
  * ============================================================================
  */
 
-static const in_port_t DEFAULT_NTP_PORT = 123;
-static const in_port_t DEFAULT_NTPQ_PORT = 323;
-static const int MIN_BUFFER_SIZE = 1024;
-static const int MAX_BUFFER_SIZE = (4 * 1024 * 1024);
+enum {
+	DEFAULT_NTP_PORT = 123,
+	DEFAULT_NTPQ_PORT = 323,
+	MIN_BUFFER_SIZE = 1024,
+	MAX_BUFFER_SIZE = (4 * 1024 * 1024)
+};
 
 /*
  * ============================================================================
@@ -38,11 +39,17 @@ static const int MAX_BUFFER_SIZE = (4 * 1024 * 1024);
 /**
  * Validate socket file descriptor
  * @param sock Socket file descriptor
- * @return True if valid
+ * @return 1 if valid, 0 otherwise
  */
-static inline bool is_valid_socket(int sock)
+static inline int is_valid_socket(int sock)
 {
-	return sock >= 0;
+	if (sock < 0)
+		return 0;
+
+	if (fcntl(sock, F_GETFD) < 0)
+		return 0;
+
+	return 1;
 }
 
 /**
@@ -68,15 +75,12 @@ static inline in_port_t nport(in_port_t port)
 /**
  * Set socket non-blocking
  * @param sock Socket file descriptor
- * @param nonblock True for non-blocking mode
+ * @param nonblock 1 for non-blocking mode, 0 for blocking
  * @return 0 on success, -1 on error
  */
-static inline int set_socket_nonblock(int sock, bool nonblock)
+static inline int set_socket_nonblock(int sock, int nonblock)
 {
 	int flags;
-
-	if (!is_valid_socket(sock))
-		return -1;
 
 	flags = fcntl(sock, F_GETFL, 0);
 	if (flags < 0)
@@ -357,7 +361,7 @@ int accept_network_connection(int sock, NetworkClientInfo *client_info)
 		client_info->address.family = AF_INET;
 		client_info->address.addr.addr_in4 = *addr4;
 		client_info->port = addr4->sin_port;
-		client_info->address.is_v6 = false;
+		client_info->address.is_v6 = 0;
 
 		if (inet_ntop(AF_INET, &addr4->sin_addr,
 			    client_info->address_str,
@@ -372,7 +376,7 @@ int accept_network_connection(int sock, NetworkClientInfo *client_info)
 		client_info->address.family = AF_INET6;
 		client_info->address.addr.addr_in6 = *addr6;
 		client_info->port = addr6->sin6_port;
-		client_info->address.is_v6 = true;
+		client_info->address.is_v6 = 1;
 
 		if (inet_ntop(AF_INET6, &addr6->sin6_addr,
 			    client_info->address_str,
@@ -424,7 +428,7 @@ ssize_t sendto_network(int sock, const void *buffer, size_t length,
 		return -1;
 	}
 
-	if (length == 0 || length > SIZE_MAX) {
+	if (length == 0 || length > (size_t)SSIZE_MAX) {
 		errno = EMSGSIZE;
 		return -1;
 	}
@@ -486,7 +490,7 @@ ssize_t recvfrom_network(int sock, void *buffer, size_t length,
 		return -1;
 	}
 
-	if (length == 0 || length > SIZE_MAX) {
+	if (length == 0 || length > (size_t)SSIZE_MAX) {
 		errno = EMSGSIZE;
 		return -1;
 	}
@@ -503,7 +507,10 @@ ssize_t recvfrom_network(int sock, void *buffer, size_t length,
 	if (received < 0)
 		return -1;
 
-	if (!client_info || addr_len == 0)
+	if (addr_len == 0)
+		return received;
+
+	if (!client_info)
 		return received;
 
 	if (client_addr.ss_family != AF_INET &&
@@ -519,7 +526,7 @@ ssize_t recvfrom_network(int sock, void *buffer, size_t length,
 		client_info->address.family = AF_INET;
 		client_info->address.addr.addr_in4 = *addr4;
 		client_info->port = addr4->sin_port;
-		client_info->address.is_v6 = false;
+		client_info->address.is_v6 = 0;
 
 		if (inet_ntop(AF_INET, &addr4->sin_addr,
 			    client_info->address_str,
@@ -534,7 +541,7 @@ ssize_t recvfrom_network(int sock, void *buffer, size_t length,
 		client_info->address.family = AF_INET6;
 		client_info->address.addr.addr_in6 = *addr6;
 		client_info->port = addr6->sin6_port;
-		client_info->address.is_v6 = true;
+		client_info->address.is_v6 = 1;
 
 		if (inet_ntop(AF_INET6, &addr6->sin6_addr,
 			    client_info->address_str,
@@ -606,14 +613,14 @@ int parse_network_address(const char *addr_str, in_port_t port,
 		addr->family = AF_INET;
 		addr->addr.addr_in4 = *addr4;
 		addr->port = port;
-		addr->is_v6 = false;
+		addr->is_v6 = 0;
 	} else if (result->ai_family == AF_INET6) {
 		struct sockaddr_in6 *addr6 =
 			(struct sockaddr_in6 *)result->ai_addr;
 		addr->family = AF_INET6;
 		addr->addr.addr_in6 = *addr6;
 		addr->port = port;
-		addr->is_v6 = true;
+		addr->is_v6 = 1;
 	} else {
 		freeaddrinfo(result);
 		errno = EAFNOSUPPORT;
@@ -675,16 +682,16 @@ size_t format_network_address(const NetworkAddress *addr,
 bool is_loopback_address(const NetworkAddress *addr)
 {
 	if (!addr)
-		return false;
+		return 0;
 
 	if (addr->family == AF_INET) {
 		return (addr->addr.addr_in4.sin_addr.s_addr ==
-			htonl(INADDR_LOOPBACK));
+			INADDR_LOOPBACK);
 	} else if (addr->family == AF_INET6) {
 		return IN6_IS_ADDR_LOOPBACK(&addr->addr.addr_in6.sin6_addr);
 	}
 
-	return false;
+	return 0;
 }
 
 /**
@@ -696,10 +703,10 @@ bool is_loopback_address(const NetworkAddress *addr)
 bool addresses_equal(const NetworkAddress *addr1, const NetworkAddress *addr2)
 {
 	if (!addr1 || !addr2)
-		return false;
+		return 0;
 
 	if (addr1->family != addr2->family)
-		return false;
+		return 0;
 
 	if (addr1->family == AF_INET) {
 		return (addr1->addr.addr_in4.sin_addr.s_addr ==
@@ -709,7 +716,7 @@ bool addresses_equal(const NetworkAddress *addr1, const NetworkAddress *addr2)
 					   &addr2->addr.addr_in6.sin6_addr);
 	}
 
-	return false;
+	return 0;
 }
 
 /**
@@ -781,8 +788,9 @@ int join_multicast_group(int sock, const char *group, in_port_t port,
 	if (ttl > 0) {
 		int ttl_val = ttl;
 		int ttl_ret = setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
-			  &ttl_val, sizeof(ttl_val));
-		(void)ttl_ret;
+			 &ttl_val, sizeof(ttl_val));
+		if (ttl_ret < 0)
+			return -1;
 	}
 
 	return 0;
@@ -1068,11 +1076,11 @@ bool network_socket_is_dual_stack(int sock)
 	int family;
 
 	if (!is_valid_socket(sock))
-		return false;
+		return 0;
 
 	family = network_socket_get_family(sock);
 	if (family < 0)
-		return false;
+		return 0;
 
 	return (family == AF_INET6);
 }

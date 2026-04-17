@@ -25,14 +25,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <net/if.h>
@@ -88,11 +85,11 @@
 typedef struct {
     int family;              /* AF_INET or AF_INET6 */
     union {
-        struct sockaddr_in  addr_in4;    /* IPv4 address */
+        struct sockaddr_in  addr_in4;   /* IPv4 address */
         struct sockaddr_in6 addr_in6;  /* IPv6 address */
     } addr;
     uint16_t port;          /* Network byte order */
-    bool is_v6;             /* True if IPv6 address */
+    int is_v6;             /* 1 if IPv6 address, 0 otherwise */
 } NetworkAddress;
 
 /*
