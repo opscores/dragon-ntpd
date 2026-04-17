@@ -662,6 +662,7 @@ size_t format_network_address(const NetworkAddress *addr,
 			      char *buf, size_t buf_size)
 {
 	char addr_str[INET6_ADDRSTRLEN];
+	size_t len;
 
 	if (!addr || !buf || buf_size == 0) {
 		if (buf && buf_size > 0)
@@ -675,16 +676,20 @@ size_t format_network_address(const NetworkAddress *addr,
 			buf[0] = '\0';
 			return 0;
 		}
-		snprintf(buf, buf_size, "%s:%u", addr_str,
+		len = (size_t)snprintf(buf, buf_size, "%s:%u", addr_str,
 			 nport(addr->port));
+		if (len >= buf_size)
+			buf[buf_size - 1] = '\0';
 	} else if (addr->family == AF_INET6) {
 		if (inet_ntop(AF_INET6, &addr->addr.addr_in6.sin6_addr,
 			    addr_str, sizeof(addr_str)) == NULL) {
 			buf[0] = '\0';
 			return 0;
 		}
-		snprintf(buf, buf_size, "[%s]:%u", addr_str,
+		len = (size_t)snprintf(buf, buf_size, "[%s]:%u", addr_str,
 			 nport(addr->port));
+		if (len >= buf_size)
+			buf[buf_size - 1] = '\0';
 	} else {
 		buf[0] = '\0';
 		return 0;
@@ -804,6 +809,8 @@ int join_multicast_group(int sock, const char *group, in_port_t port,
 	if (ret < 0)
 		return -1;
 
+	track_mcast_group(&mreq);
+
 	if (ttl > 0) {
 		int ttl_val = ttl;
 		int ttl_ret = setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
@@ -882,17 +889,64 @@ int network_init_multicast(int sock, const NetworkConfig *config)
 	return 0;
 }
 
+/*
+ * ============================================================================
+ * Multicast State Tracking
+ * ============================================================================
+ */
+
+static struct {
+	int sock;
+	struct ipv6_mreq groups[NETWORK_MAX_MULTICAST_GROUPS];
+	int count;
+} g_mcast_state;
+
+/**
+ * Track multicast group membership
+ * @param mreq Multicast group request
+ * @return 0 on success, -1 on failure
+ */
+static int track_mcast_group(const struct ipv6_mreq *mreq)
+{
+	int i;
+
+	if (g_mcast_state.count >= NETWORK_MAX_MULTICAST_GROUPS)
+		return -1;
+
+	for (i = 0; i < g_mcast_state.count; i++) {
+		if (memcmp(&g_mcast_state.groups[i], mreq, sizeof(*mreq)) == 0)
+			return 0;
+	}
+
+	g_mcast_state.groups[g_mcast_state.count] = *mreq;
+	g_mcast_state.count++;
+
+	return 0;
+}
+
 /**
  * Cleanup multicast group memberships
  * @param sock Socket file descriptor
  * @return 0 on success, -1 on error
  *
- * @note Placeholder - full implementation would need to track joined groups
+ * @note On Linux, multicast groups are automatically released on socket close
+ * This function provides explicit cleanup for portability
  */
 int network_cleanup_multicast(int sock)
 {
+	struct ipv6_mreq mreq;
+	int i;
+
 	if (!is_valid_socket(sock))
 		return 0;
+
+	for (i = 0; i < g_mcast_state.count; i++) {
+		mreq = g_mcast_state.groups[i];
+		(void)setsockopt(sock, IPPROTO_IPV6, IPV6_LEAVE_GROUP,
+				 &mreq, sizeof(mreq));
+	}
+
+	g_mcast_state.count = 0;
 
 	return 0;
 }
