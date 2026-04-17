@@ -83,13 +83,13 @@
  * - Compatible with standard POSIX socket API
  */
 typedef struct {
-    int family;              /* AF_INET or AF_INET6 */
-    union {
-        struct sockaddr_in  addr_in4;   /* IPv4 address */
-        struct sockaddr_in6 addr_in6;  /* IPv6 address */
-    } addr;
-    uint16_t port;          /* Network byte order */
-    int is_v6;             /* 1 if IPv6 address, 0 otherwise */
+	int family;              /* AF_INET or AF_INET6 (hot field) */
+	uint16_t port;          /* Network byte order (hot field) */
+	int is_v6;             /* 1 if IPv6 address, 0 otherwise (hot field) */
+	union {
+		struct sockaddr_in  addr_in4;   /* IPv4 address */
+		struct sockaddr_in6 addr_in6;  /* IPv6 address */
+	} addr;                 /* 28 bytes, placed last for cache alignment */
 } NetworkAddress;
 
 /*
