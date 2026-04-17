@@ -1,0 +1,60 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.la
+ntpd
+ntpd.o
+ntpd.a
+ntpd.so
+
+# Debug symbols
+*.dSYM/
+*.pdb
+
+# OS files (macOS, Windows)
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+.classpath
+.nature
+
+# Log files
+*.log
+
+# PID files
+*.pid
+
+# Core dumps
+core
+core.*
+
+# Environment files
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Documentation files (not part of source code)
+todo/
+rfc_security_analysis.md
+rfc_security_analysis_ru.md
+market_analysis.md
+todo.md
+struct.md
+
+# RFC documents (downloaded for reference)
+rfc*.txt

@@ -1,6 +1,6 @@
 .TH NTPD 8 "April 2026" "ntpd v1.0" "User Commands"
 .SH NAME
-ntpd \- Network Time Protocol daemon (NTPv4 server)
+ntpd \- Network Time Protocol daemon (NTPv4 server with RFC 5905/8915 compliance)
 .SH SYNOPSIS
 .B ntpd
 [\fIOPTIONS\fR]
@@ -20,7 +20,27 @@ is a Network Time Protocol (NTP) version 4 server implementation in C.
 It synchronizes the system clock with external NTP servers and provides
 time services to NTP clients.
 .P
-This implementation follows RFC 5905 and related specifications for NTPv4.
+This implementation follows RFC 5905, RFC 5906, RFC 8915, and related specifications for NTPv4.
+.P
+Features:
+.IP \(bu 2
+Full NTPv4 packet format support (48-byte header + extension fields)
+.IP \(bu 2
+Clock filter algorithm for outlier rejection
+.IP \(bu 2
+Dynamic poll interval adjustment (16s - 36h)
+.IP \(bu 2
+Clock discipline algorithm (STEP/SLEW)
+.IP \(bu 2
+Multi-threaded architecture (peer + clock threads)
+.IP \(bu 2
+Extension fields support (RFC 5905, RFC 8915 NTS)
+.IP \(bu 2
+Kiss-o'-Death marker handling
+.IP \(bu 2
+I-DO capability negotiation
+.P
+Note: Full cryptographic authentication (MD5 MAC, Autokey) is planned for future releases.
 .SH OPTIONS
 .TP
 .BI \-c " file"
@@ -38,8 +58,38 @@ Specify NTP servers (comma-separated list)
 .BI \-d " debug"
 Enable debug logging level
 .TP
+.BI \-D " LEVEL"
+Set debug level (0=none, 1=info, 2=debug, 3=verbose)
+.TP
 .BI \-f " foreground"
 Run in foreground (don't daemonize)
+.TP
+.BI \-n " no-daemonize"
+Run without daemonizing (equivalent to -f)
+.TP
+.BI \-l " logfile"
+Specify log file (default: syslog)
+.TP
+.BI \-t " timeout"
+Set connection timeout in seconds (default: 10)
+.TP
+.BI \-q " quit"
+Graceful shutdown
+.TP
+.BI \-I " interface"
+Bind to specific network interface
+.TP
+.BI \-4 " ipv4-only"
+Bind to IPv4 addresses only
+.TP
+.BI \-u " user"
+Run as specified user (after daemonizing)
+.TP
+.BI \-p " pid"
+Specify PID file location (default: /var/run/ntpd.pid)
+.TP
+.BI \-V " verbose"
+Enable verbose logging
 .TP
 .BI \-h
 Display help message and exit
@@ -54,21 +104,27 @@ The configuration file should contain one NTP server per line:
 Example:
 .RS
 .nf
-pool.ntp.org:123
-time.google.com:123
-pool.ntp.org:123
-.RS
+server pool.ntp.org iburst
+server time.google.com iburst
+server 192.168.1.1 iburst
+.fi
 .RE
 .PP
 Supported formats:
 .IP
-\fIhostname\fR:\fIport\fR \- Connect to NTP server by hostname
+\fIhostname\fR:\fIport\fR \- Connect to NTP server by hostname (default port 123)
 .IP
 \fIIP_address\fR:\fIport\fR \- Connect to NTP server by IP address
 .IP
 \fIIP_address\fR \- Connect to NTP server on default port (123)
+.IP
+\fIserver_name\fR iburst \- Use iburst mode (faster initial sync)
+.IP
+\fIserver_name\fR minpoll 6 \- Set minimum poll interval (2^6 = 64 seconds)
+.IP
+\fIserver_name\fR maxpoll 10 \- Set maximum poll interval (2^10 = 1024 seconds)
 .SH NTP PACKET FORMAT
-The NTP protocol uses a 48-byte packet format (plus optional extensions):
+The NTP protocol uses a 48-byte packet format (plus optional extension fields):
 .IP
 Line 1: LI, VN, Mode (byte 0)
 .IP
@@ -93,6 +149,32 @@ Line 10: Originate timestamp (bytes 26-33)
 Line 11: Receive timestamp (bytes 34-41)
 .IP
 Line 12: Transmit timestamp (bytes 42-49)
+.SH EXTENSION FIELDS
+NTP packets may contain optional extension fields between the 48-byte header and the MAC:
+.IP
+Extension fields are 4-byte aligned
+.IP
+Minimum size: 4 bytes
+.IP
+Maximum size: 65,532 bytes
+.PP
+Supported extension field types:
+.IP
+\fI0x0000\fR \- Kiss-o'-Death marker (RFC 5905 §8.3)
+.IP
+\fI0x0003\fR \- Legacy MAC (deprecated)
+.IP
+\fI0x0005\fR \- Checksum Complement
+.IP
+\fI0x0007\fR \- I-DO Offer/Response (RFC 5905 §8.4)
+.IP
+\fI0x0008\fR \- LAST-EF (end of extension fields)
+.IP
+\fI0x0104\fR \- NTS Unique Identifier (RFC 8915)
+.IP
+\fI0x0204\fR \- NTS Cookie (RFC 8915)
+.IP
+\fI0x0404\fR \- NTS AEEF (RFC 8915)
 .SH TIMESTAMP FORMAT
 NTP uses a 64-bit timestamp with the following structure:
 .IP
@@ -150,12 +232,48 @@ T2 = Receive Timestamp (server receives request)
 T3 = Transmit Timestamp (server sends response)
 .IP
 T4 = Destination Timestamp (client receives response)
+.SH CLOCK FILTER ALGORITHM
+The clock filter algorithm uses an 8-stage shift register to groom incoming data:
+.IP
+Each stage stores a sample with its offset, delay, dispersion, and jitter
+.IP
+New samples are added to the filter
+.IP
+Old samples are removed when the filter is full
+.IP
+The median offset is used for clock discipline
+.IP
+Outliers are rejected based on delay dispersion
+.SH POLL INTERVAL ADJUSTMENT
+The poll interval is dynamically adjusted between 16 seconds (2^4) and 36 hours (2^12):
+.IP
+\fIminpoll\fR = 4 (16 seconds)
+.IP
+\fImaxpoll\fR = 12 (36 hours)
+.IP
+Adjustment is based on system offset and jitter
+.SH CLOCK DISCIPLINE ALGORITHM
+The clock discipline algorithm uses two methods:
+.IP
+\fISTEP\fR (clock_settime): Used when |offset| > 500ms
+.IP
+\fISLEW\fR (adjtime): Used when |offset| <= 500ms
+.PP
+The threshold of 500ms is specified in RFC 5905 Section 11.3.
 .SH MARX FILTER
 The Marx filter is used for outlier rejection:
 .IP
 \fithreshold\fR = median + k * MAD
 .PP
 Samples where \fI|delay - median| > threshold\fR are rejected.
+.SH KISS-O'-DEATH MARKER
+The Kiss-o'-Death (KoD) marker is indicated by Stratum=127 and Leap=3:
+.IP
+\fIRSTR\fR - Reset all associations
+.IP
+\fIDENY\fR - Deny access to this server
+.IP
+\fIRATE\fR - Rate limit requests from this client
 .SH EXIT STATUS
 .TP
 0
@@ -169,6 +287,12 @@ Socket binding error
 .TP
 3
 Server synchronization error
+.TP
+4
+Invalid NTP packet
+.TP
+5
+Extension field parsing error
 .SH SIGNALS
 .TP
 SIGHUP
@@ -179,6 +303,16 @@ Graceful shutdown
 .TP
 SIGINT
 Interrupt (graceful shutdown)
+.SH ENVIRONMENT VARIABLES
+.TP
+.B NTPD_CONFIG
+Override configuration file location
+.TP
+.B NTPD_LOG
+Override log file location
+.TP
+.B NTPD_PID
+Override PID file location
 .SH EXAMPLES
 .RS
 .IP \(bu 2
@@ -192,7 +326,7 @@ ntpd
 Run in foreground for debugging:
 .RS
 .nf
-ntpd -f
+ntpd -f -D 2
 .fi
 .RE
 .IP \(bu 2
@@ -209,6 +343,20 @@ Run with specific port:
 ntpd -p 1234
 .fi
 .RE
+.IP \(bu 2
+Run with verbose logging:
+.RS
+.nf
+ntpd -f -V
+.fi
+.RE
+.IP \(bu 2
+Run with debug level 3:
+.RS
+.nf
+ntpd -f -D 3
+.fi
+.RE
 .RE
 .SH FILES
 .TP
@@ -220,16 +368,20 @@ System log containing ntpd messages
 .TP
 .B /var/run/ntpd.pid
 Process ID file (when running as daemon)
+.TP
+.B /etc/ntpd.conf
+Alternative configuration file location
 .SH SEE ALSO
 .BR ntpdate (8),
 .BR chronyd (8),
-.BR date (1)
+.BR date (1),
+.BR ntpq (8)
 .SH RFC REFERENCES
 .RS
 .IP \(bu 2
-RFC 5905 - NTPv4 for IPv4/IPv6
+RFC 5905 - Network Time Protocol Version 4
 .IP \(bu 2
-RFC 5906 - NTPv4 for IPv4-mapped IPv6 addresses
+RFC 5906 - Network Time Protocol Version 4: Autokey Specification
 .IP \(bu 2
 RFC 5907 - NTPv4 System State Monitoring
 .IP \(bu 2
@@ -244,6 +396,8 @@ RFC 7316 - NTPv4 System State Monitoring (update)
 RFC 7317-7320 - NTPv4 HMAC Authentication
 .IP \(bu 2
 RFC 7321 - NTPv4 Packet Format (update)
+.IP \(bu 2
+RFC 8915 - Network Time Security (NTS)
 .RE
 .SH AUTHOR
 NTPD v1.0 - NTP Server Implementation in C
