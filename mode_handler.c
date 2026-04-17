@@ -248,6 +248,7 @@ int acl_check_client(const char *client_ip, uint8_t packet_mode) {
     in_addr_t ip;
     AclEntry *entry = NULL;
     int i;
+    int result = 0;
 
     if (client_ip == NULL)
         return 0;
@@ -255,6 +256,25 @@ int acl_check_client(const char *client_ip, uint8_t packet_mode) {
     ip = parse_ip(client_ip);
     if (ip == 0)
         return 0;
+
+    if (packet_mode == NTP_MODE_SYMMETRIC_ACTIVE ||
+        packet_mode == NTP_MODE_SYMMETRIC_PASSIVE) {
+        pthread_mutex_lock(&g_mode_mutex);
+        if (!g_mode_config.enable_symmetric_mode) {
+            pthread_mutex_unlock(&g_mode_mutex);
+            return 0;
+        }
+        pthread_mutex_unlock(&g_mode_mutex);
+    }
+
+    if (packet_mode == NTP_MODE_BROADCAST) {
+        pthread_mutex_lock(&g_mode_mutex);
+        if (!g_mode_config.enable_broadcast) {
+            pthread_mutex_unlock(&g_mode_mutex);
+            return 0;
+        }
+        pthread_mutex_unlock(&g_mode_mutex);
+    }
 
     pthread_mutex_lock(&g_mode_mutex);
 
@@ -266,22 +286,28 @@ int acl_check_client(const char *client_ip, uint8_t packet_mode) {
     }
 
     flags = entry ? entry->flags : g_mode_config.acl_default_policy;
-    pthread_mutex_unlock(&g_mode_mutex);
 
     switch (packet_mode) {
     case NTP_MODE_CONTROL:
     case NTP_MODE_PRIVATE:
-        return (flags & ACL_FLAG_NOQUERY) == 0;
+        result = (flags & ACL_FLAG_NOQUERY) == 0;
+        break;
     case NTP_MODE_CLIENT:
     case NTP_MODE_SERVER:
     case NTP_MODE_SYMMETRIC_ACTIVE:
     case NTP_MODE_SYMMETRIC_PASSIVE:
-        return (flags & ACL_FLAG_NOSERVE) == 0;
+        result = (flags & ACL_FLAG_NOSERVE) == 0;
+        break;
     case NTP_MODE_BROADCAST:
-        return (flags & ACL_FLAG_NOSERVE) == 0;
+        result = (flags & ACL_FLAG_NOSERVE) == 0;
+        break;
     default:
-        return 0;
+        result = 0;
+        break;
     }
+
+    pthread_mutex_unlock(&g_mode_mutex);
+    return result;
 }
 
 uint8_t acl_get_client_flags(const char *client_ip) {

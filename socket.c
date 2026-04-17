@@ -162,6 +162,17 @@ static void *handle_peer_request_thread(void *arg) {
         return NULL;
     }
 
+    if (mode == NTP_MODE_CONTROL || mode == NTP_MODE_PRIVATE) {
+        ModeConfig cfg;
+        mode_handler_get_config(&cfg);
+        if (!cfg.enable_control_messages) {
+            syslog(LOG_DEBUG, "Mode %u отклонён (отключён): %s:%s", mode, ip, port);
+            free(data->buffer);
+            free(data);
+            return NULL;
+        }
+    }
+
     if (!acl_check_client(ip, mode)) {
         syslog(LOG_WARNING, "ACL отклонён: mode=%u от %s:%s", mode, ip, port);
         free(data->buffer);
@@ -176,12 +187,13 @@ static void *handle_peer_request_thread(void *arg) {
         return NULL;
     }
 
-    uint8_t response_mode = 4;
-    if (mode == 1 || mode == 2) {
-        response_mode = 2;
-    } else if (mode == 3) {
-        response_mode = 4;
-    } else if (mode == 5) {
+    uint8_t response_mode = 0;
+    if (mode == NTP_MODE_CLIENT) {
+        response_mode = NTP_MODE_SERVER;
+    } else if (mode == NTP_MODE_SYMMETRIC_ACTIVE ||
+               mode == NTP_MODE_SYMMETRIC_PASSIVE) {
+        response_mode = NTP_MODE_SYMMETRIC_PASSIVE;
+    } else if (mode == NTP_MODE_BROADCAST) {
     } else {
         syslog(LOG_WARNING, "Неизвестный mode %u от %s:%s", mode, ip, port);
         free(data->buffer);
@@ -189,8 +201,9 @@ static void *handle_peer_request_thread(void *arg) {
         return NULL;
     }
 
-    if (vn != NTP_VN_4) {
-        syslog(LOG_WARNING, "Неверная версия NTP: %u от %s:%s", vn, ip, port);
+    if (response_mode == 0) {
+        free(data->buffer);
+        free(data);
         return NULL;
     }
 
