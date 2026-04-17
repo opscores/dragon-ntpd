@@ -306,6 +306,7 @@ int accept_network_connection(int sock, NetworkClientInfo *client_info)
 	struct sockaddr_in *addr4;
 	struct sockaddr_in6 *addr6;
 	socklen_t addr_len;
+	int sock_type;
 	int family;
 	int ret;
 
@@ -314,23 +315,39 @@ int accept_network_connection(int sock, NetworkClientInfo *client_info)
 		return -1;
 	}
 
+	sock_type = network_socket_get_type(sock);
+	if (sock_type < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	memset(&client_addr, 0, sizeof(client_addr));
 	addr_len = sizeof(client_addr);
 	family = network_socket_get_family(sock);
 
-	if (family == AF_INET) {
-		addr4 = (struct sockaddr_in *)&client_addr;
-		addr_len = sizeof(*addr4);
-	} else {
-		addr6 = (struct sockaddr_in6 *)&client_addr;
-		addr_len = sizeof(*addr6);
+	if (family < 0) {
+		errno = EINVAL;
+		return -1;
 	}
 
-	ret = recvfrom(sock, NULL, 0, MSG_PEEK,
-		       (struct sockaddr *)&client_addr, &addr_len);
+	if (sock_type == SOCK_STREAM) {
+		ret = accept(sock, (struct sockaddr *)&client_addr, &addr_len);
+		if (ret < 0)
+			return -1;
+	} else {
+		if (family == AF_INET) {
+			addr4 = (struct sockaddr_in *)&client_addr;
+			addr_len = sizeof(*addr4);
+		} else {
+			addr6 = (struct sockaddr_in6 *)&client_addr;
+			addr_len = sizeof(*addr6);
+		}
 
-	if (ret < 0)
-		return -1;
+		ret = recvfrom(sock, NULL, 0, MSG_PEEK,
+			       (struct sockaddr *)&client_addr, &addr_len);
+		if (ret < 0)
+			return -1;
+	}
 
 	memset(client_info, 0, sizeof(*client_info));
 	client_info->is_v6 = (client_addr.ss_family == AF_INET6);
@@ -342,9 +359,11 @@ int accept_network_connection(int sock, NetworkClientInfo *client_info)
 		client_info->port = addr4->sin_port;
 		client_info->address.is_v6 = false;
 
-		inet_ntop(AF_INET, &addr4->sin_addr,
-			  client_info->address_str,
-			  sizeof(client_info->address_str));
+		if (inet_ntop(AF_INET, &addr4->sin_addr,
+			    client_info->address_str,
+			    sizeof(client_info->address_str)) == NULL) {
+			client_info->address_str[0] = '\0';
+		}
 		snprintf(client_info->address_family_str,
 			sizeof(client_info->address_family_str),
 			"IPv4");
@@ -355,9 +374,11 @@ int accept_network_connection(int sock, NetworkClientInfo *client_info)
 		client_info->port = addr6->sin6_port;
 		client_info->address.is_v6 = true;
 
-		inet_ntop(AF_INET6, &addr6->sin6_addr,
-			  client_info->address_str,
-			  sizeof(client_info->address_str));
+		if (inet_ntop(AF_INET6, &addr6->sin6_addr,
+			    client_info->address_str,
+			    sizeof(client_info->address_str)) == NULL) {
+			client_info->address_str[0] = '\0';
+		}
 		snprintf(client_info->address_family_str,
 			sizeof(client_info->address_family_str),
 			"IPv6");
@@ -489,9 +510,11 @@ ssize_t recvfrom_network(int sock, void *buffer, size_t length,
 			client_info->port = addr4->sin_port;
 			client_info->address.is_v6 = false;
 
-			inet_ntop(AF_INET, &addr4->sin_addr,
-				  client_info->address_str,
-				  sizeof(client_info->address_str));
+			if (inet_ntop(AF_INET, &addr4->sin_addr,
+				    client_info->address_str,
+				    sizeof(client_info->address_str)) == NULL) {
+				client_info->address_str[0] = '\0';
+			}
 			snprintf(client_info->address_family_str,
 				sizeof(client_info->address_family_str),
 				"IPv4");
@@ -502,9 +525,11 @@ ssize_t recvfrom_network(int sock, void *buffer, size_t length,
 			client_info->port = addr6->sin6_port;
 			client_info->address.is_v6 = true;
 
-			inet_ntop(AF_INET6, &addr6->sin6_addr,
-				  client_info->address_str,
-				  sizeof(client_info->address_str));
+			if (inet_ntop(AF_INET6, &addr6->sin6_addr,
+				    client_info->address_str,
+				    sizeof(client_info->address_str)) == NULL) {
+				client_info->address_str[0] = '\0';
+			}
 			snprintf(client_info->address_family_str,
 				sizeof(client_info->address_family_str),
 				"IPv6");
@@ -601,7 +626,6 @@ size_t format_network_address(const NetworkAddress *addr,
 			      char *buf, size_t buf_size)
 {
 	char addr_str[INET6_ADDRSTRLEN];
-	const char *ret;
 
 	if (!addr || !buf || buf_size == 0) {
 		if (buf && buf_size > 0)
@@ -610,23 +634,21 @@ size_t format_network_address(const NetworkAddress *addr,
 	}
 
 	if (addr->family == AF_INET) {
-		ret = inet_ntop(AF_INET, &addr->addr.addr_in4.sin_addr,
-			       addr_str, sizeof(addr_str));
-		if (ret) {
-			snprintf(buf, buf_size, "%s:%u", addr_str,
-				 nport(addr->port));
-		} else {
+		if (inet_ntop(AF_INET, &addr->addr.addr_in4.sin_addr,
+			    addr_str, sizeof(addr_str)) == NULL) {
 			buf[0] = '\0';
+			return 0;
 		}
+		snprintf(buf, buf_size, "%s:%u", addr_str,
+			 nport(addr->port));
 	} else if (addr->family == AF_INET6) {
-		ret = inet_ntop(AF_INET6, &addr->addr.addr_in6.sin6_addr,
-			       addr_str, sizeof(addr_str));
-		if (ret) {
-			snprintf(buf, buf_size, "[%s]:%u", addr_str,
-				 nport(addr->port));
-		} else {
+		if (inet_ntop(AF_INET6, &addr->addr.addr_in6.sin6_addr,
+			    addr_str, sizeof(addr_str)) == NULL) {
 			buf[0] = '\0';
+			return 0;
 		}
+		snprintf(buf, buf_size, "[%s]:%u", addr_str,
+			 nport(addr->port));
 	} else {
 		buf[0] = '\0';
 		return 0;
