@@ -19,6 +19,7 @@ static ModeConfig g_mode_config = {
     .enable_symmetric_mode = 0,
     .enable_broadcast = 0,
     .drop_unauthenticated_control = 1,
+    .enable_ntp_auth = DEFAULT_ENABLE_NTP_AUTH,
     .acl_default_policy = DEFAULT_ACL_FLAGS,
     .rate_limit_interval = DEFAULT_RATE_LIMIT_INTERVAL,
     .max_response_ratio = DEFAULT_MAX_RESPONSE_RATIO,
@@ -511,6 +512,10 @@ int mode_handler_parse_config(const char *config_file) {
             int b = parse_bool(val);
             if (b >= 0)
                 g_mode_config.drop_unauthenticated_control = (uint8_t)b;
+        } else if (strcmp(key, "enable_ntp_auth") == 0) {
+            int b = parse_bool(val);
+            if (b >= 0)
+                g_mode_config.enable_ntp_auth = (uint8_t)b;
         } else if (strcmp(key, "acl_default_policy") == 0) {
             uint8_t flags = 0;
             char *p = val;
@@ -558,5 +563,68 @@ int mode_handler_parse_config(const char *config_file) {
 
     fclose(fp);
     syslog(LOG_INFO, "Parsed %d lines from config", lineno);
+    return 0;
+}
+
+int validate_packet_authentication(const void *buffer, size_t size) {
+    const uint8_t *data;
+    uint16_t field_type;
+    uint16_t field_len;
+    size_t pos;
+
+    if (buffer == NULL || size < 48)
+        return 0;
+
+    data = (const uint8_t *)buffer;
+
+    if (size > 48) {
+        pos = 48;
+        while (pos + 4 <= size) {
+            field_type = (uint16_t)(data[pos] << 8) | data[pos + 1];
+            field_len = (uint16_t)(data[pos + 2] << 8) | data[pos + 3];
+
+            if (field_len < 4 || pos + field_len > size)
+                break;
+
+            if (field_type == 0x0003) {
+                pthread_mutex_lock(&g_mode_mutex);
+                uint8_t auth_enabled = g_mode_config.enable_ntp_auth;
+                pthread_mutex_unlock(&g_mode_mutex);
+
+                if (!auth_enabled) {
+                    syslog(LOG_WARNING, "Authentication MAC present but NTP auth disabled");
+                    return -ENOTSUP;
+                }
+                return 1;
+            }
+
+            pos += ((field_len + 3) & ~3u);
+            if (field_type == 0x0008)
+                break;
+        }
+    }
+
+    return 0;
+}
+
+int check_panic_condition(int64_t time_offset) {
+    uint16_t threshold;
+
+    if (time_offset == 0)
+        return 0;
+
+    pthread_mutex_lock(&g_mode_mutex);
+    threshold = g_mode_config.panic_threshold;
+    pthread_mutex_unlock(&g_mode_mutex);
+
+    if (time_offset < 0)
+        time_offset = -time_offset;
+
+    if (time_offset > (int64_t)threshold * 1000000000LL) {
+        syslog(LOG_CRIT, "PANIC: time offset %lld exceeds threshold %d",
+              (long long)time_offset, threshold);
+        return 1;
+    }
+
     return 0;
 }

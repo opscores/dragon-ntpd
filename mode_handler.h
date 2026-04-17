@@ -41,11 +41,14 @@
 #define DEFAULT_PANIC_THRESHOLD      1000
 #define DEFAULT_INITIAL_STRATUM       16
 
+#define DEFAULT_ENABLE_NTP_AUTH      0
+
 typedef struct {
     uint8_t enable_control_messages;
     uint8_t enable_symmetric_mode;
     uint8_t enable_broadcast;
     uint8_t drop_unauthenticated_control;
+    uint8_t enable_ntp_auth;
     uint8_t acl_default_policy;
     uint8_t rate_limit_interval;
     float max_response_ratio;
@@ -92,5 +95,8 @@ int validate_packet_mode(uint8_t mode, size_t req_size, size_t resp_size);
 int validate_ntp_version(uint8_t version);
 
 int mode_handler_parse_config(const char *config_file);
+
+int validate_packet_authentication(const void *buffer, size_t size);
+int check_panic_condition(int64_t time_offset);
 
 #endif

@@ -162,6 +162,13 @@ static void *handle_peer_request_thread(void *arg) {
         return NULL;
     }
 
+    if (validate_packet_authentication(buffer, size) == -ENOTSUP) {
+        syslog(LOG_WARNING, "Authentication field present but auth disabled");
+        free(data->buffer);
+        free(data);
+        return NULL;
+    }
+
     if (mode == NTP_MODE_CONTROL || mode == NTP_MODE_PRIVATE) {
         ModeConfig cfg;
         mode_handler_get_config(&cfg);
@@ -202,6 +209,13 @@ static void *handle_peer_request_thread(void *arg) {
     }
 
     if (response_mode == 0) {
+        free(data->buffer);
+        free(data);
+        return NULL;
+    }
+
+    if (validate_packet_mode(response_mode, size, 48) != 0) {
+        syslog(LOG_WARNING, "Response size exceeds max_response_ratio");
         free(data->buffer);
         free(data);
         return NULL;

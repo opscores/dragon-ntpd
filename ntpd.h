@@ -233,6 +233,8 @@ uint8_t mode_get_default_li(void);
 uint8_t mode_get_default_stratum(void);
 uint32_t mode_get_default_ref_id(void);
 int validate_packet_mode(uint8_t mode, size_t req_size, size_t resp_size);
+int validate_packet_authentication(const void *buffer, size_t size);
+int check_panic_condition(int64_t time_offset);
 int mode_handler_parse_config(const char *config_file);
 
 #endif
