@@ -42,9 +42,7 @@ NtpTimestamp ntp_timestamp_now(void) {
 }
 
 int apply_time_correction_slew_or_step(int64_t offset_us) {
-    const int64_t step_threshold_us = 500000;
-
-    if (offset_us > step_threshold_us || offset_us < -step_threshold_us) {
+    if (offset_us > STEP_THRESHOLD_US || offset_us < -STEP_THRESHOLD_US) {
         struct timespec now_ts;
         if (clock_gettime(CLOCK_REALTIME, &now_ts) != 0) return -1;
         int64_t ns = (int64_t)now_ts.tv_sec * 1000000000LL + (int64_t)now_ts.tv_nsec;

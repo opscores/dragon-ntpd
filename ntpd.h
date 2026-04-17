@@ -51,6 +51,7 @@
 #define MARX_K 3
 #define PHI 15
 #define MAXDIST 1000000  /* RFC 5905 Section 11.3: max distance threshold (1 sec in us) */
+#define STEP_THRESHOLD_US 500000  /* RFC 5905 Section 11.3: step threshold (500ms) */
 #define POLL_DELAY_HIGH_THRESHOLD_US 100000   /* High delay threshold (100ms) */
 #define POLL_DELAY_LOW_THRESHOLD_US 10000    /* Low delay threshold (10ms) */
 #define POLL_OFFSET_HIGH_THRESHOLD_US 50000  /* High offset threshold (50ms) */
