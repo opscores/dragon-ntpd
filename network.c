@@ -436,7 +436,7 @@ ssize_t sendto_network(int sock, const void *buffer, size_t length,
 		addr4.sin_addr = dest->addr.addr_in4.sin_addr;
 		addr = (struct sockaddr *)&addr4;
 		addr_len = sizeof(addr4);
-	} else {
+	} else if (dest->family == AF_INET6) {
 		memset(&addr6, 0, sizeof(addr6));
 		addr6.sin6_family = AF_INET6;
 		addr6.sin6_port = dest->port;
@@ -447,6 +447,9 @@ ssize_t sendto_network(int sock, const void *buffer, size_t length,
 		}
 		addr = (struct sockaddr *)&addr6;
 		addr_len = sizeof(addr6);
+	} else {
+		errno = EAFNOSUPPORT;
+		return -1;
 	}
 
 	sent = sendto(sock, buffer, length, 0, addr, addr_len);
@@ -500,43 +503,50 @@ ssize_t recvfrom_network(int sock, void *buffer, size_t length,
 	if (received < 0)
 		return -1;
 
-	if (client_info && addr_len > 0) {
-		client_info->is_v6 = (client_addr.ss_family == AF_INET6);
+	if (!client_info || addr_len == 0)
+		return received;
 
-		if (client_addr.ss_family == AF_INET) {
-			addr4 = (struct sockaddr_in *)&client_addr;
-			client_info->address.family = AF_INET;
-			client_info->address.addr.addr_in4 = *addr4;
-			client_info->port = addr4->sin_port;
-			client_info->address.is_v6 = false;
-
-			if (inet_ntop(AF_INET, &addr4->sin_addr,
-				    client_info->address_str,
-				    sizeof(client_info->address_str)) == NULL) {
-				client_info->address_str[0] = '\0';
-			}
-			snprintf(client_info->address_family_str,
-				sizeof(client_info->address_family_str),
-				"IPv4");
-		} else if (client_addr.ss_family == AF_INET6) {
-			addr6 = (struct sockaddr_in6 *)&client_addr;
-			client_info->address.family = AF_INET6;
-			client_info->address.addr.addr_in6 = *addr6;
-			client_info->port = addr6->sin6_port;
-			client_info->address.is_v6 = true;
-
-			if (inet_ntop(AF_INET6, &addr6->sin6_addr,
-				    client_info->address_str,
-				    sizeof(client_info->address_str)) == NULL) {
-				client_info->address_str[0] = '\0';
-			}
-			snprintf(client_info->address_family_str,
-				sizeof(client_info->address_family_str),
-				"IPv6");
-		}
-
-		client_info->address.port = client_info->port;
+	if (client_addr.ss_family != AF_INET &&
+	    client_addr.ss_family != AF_INET6) {
+		errno = EAFNOSUPPORT;
+		return -1;
 	}
+
+	client_info->is_v6 = (client_addr.ss_family == AF_INET6);
+
+	if (client_addr.ss_family == AF_INET) {
+		addr4 = (struct sockaddr_in *)&client_addr;
+		client_info->address.family = AF_INET;
+		client_info->address.addr.addr_in4 = *addr4;
+		client_info->port = addr4->sin_port;
+		client_info->address.is_v6 = false;
+
+		if (inet_ntop(AF_INET, &addr4->sin_addr,
+			    client_info->address_str,
+			    sizeof(client_info->address_str)) == NULL) {
+			client_info->address_str[0] = '\0';
+		}
+		snprintf(client_info->address_family_str,
+			sizeof(client_info->address_family_str),
+			"IPv4");
+	} else if (client_addr.ss_family == AF_INET6) {
+		addr6 = (struct sockaddr_in6 *)&client_addr;
+		client_info->address.family = AF_INET6;
+		client_info->address.addr.addr_in6 = *addr6;
+		client_info->port = addr6->sin6_port;
+		client_info->address.is_v6 = true;
+
+		if (inet_ntop(AF_INET6, &addr6->sin6_addr,
+			    client_info->address_str,
+			    sizeof(client_info->address_str)) == NULL) {
+			client_info->address_str[0] = '\0';
+		}
+		snprintf(client_info->address_family_str,
+			sizeof(client_info->address_family_str),
+			"IPv6");
+	}
+
+	client_info->address.port = client_info->port;
 
 	return received;
 }
@@ -849,6 +859,8 @@ int network_init_multicast(int sock, const NetworkConfig *config)
  * Cleanup multicast group memberships
  * @param sock Socket file descriptor
  * @return 0 on success, -1 on error
+ *
+ * @note Placeholder - full implementation would need to track joined groups
  */
 int network_cleanup_multicast(int sock)
 {
@@ -1121,25 +1133,16 @@ int network_socket_get_type(int sock)
  */
 int network_socket_get_protocol(int sock)
 {
-	struct sockaddr_storage addr;
-	socklen_t addr_len;
-	int ret;
+	int sock_type;
 
 	if (!is_valid_socket(sock))
 		return -1;
 
-	addr_len = sizeof(addr);
-	ret = getsockname(sock, (struct sockaddr *)&addr, &addr_len);
-	if (ret < 0)
+	sock_type = network_socket_get_type(sock);
+	if (sock_type < 0)
 		return -1;
 
-	if (addr.ss_family == AF_INET) {
-		return IPPROTO_UDP;
-	} else if (addr.ss_family == AF_INET6) {
-		return IPPROTO_UDP;
-	}
-
-	return -1;
+	return (sock_type == SOCK_STREAM) ? IPPROTO_TCP : IPPROTO_UDP;
 }
 
 /*
