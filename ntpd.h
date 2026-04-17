@@ -187,6 +187,13 @@ void close_socket(int sock);
 int get_sync_socket(void);
 void handle_client_request(const void *buffer, size_t size, const char *ip, const char *port);
 
+/* TCP ntpq listener (RFC 5905 Section 6) */
+int create_tcp_socket(int port);
+int get_tcp_socket(void);
+int start_tcp_listener(void);
+void stop_tcp_listener(void);
+int start_ntpq_thread(void);
+
 /* Threads functions (RFC 5905 Section 5) */
 int start_clock_thread(int interval_sec);
 void stop_clock_thread(void);

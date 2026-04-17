@@ -1,7 +1,11 @@
 #include "ntpd.h"
 #include <stdlib.h>
+#include <sys/select.h>
+
+#define NTPQ_PORT 323
 
 int g_sync_sock = -1;
+static int g_tcp_sock = -1;
 
 int get_sync_socket(void) {
     if (g_sync_sock >= 0) return g_sync_sock;
@@ -65,9 +69,43 @@ int create_udp_socket(int port) {
 }
 
 void close_socket(int sock) {
-    if (sock >= 0 && sock != g_sync_sock) {
+    if (sock >= 0 && sock != g_sync_sock && sock != g_tcp_sock) {
         close(sock);
     }
+}
+
+int create_tcp_socket(int port) {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        syslog(LOG_ERR, "Ошибка создания TCP сокета: %s", strerror(errno));
+        return -1;
+    }
+
+    int reuse = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+        syslog(LOG_WARNING, "Не удалось установить SO_REUSEADDR: %s", strerror(errno));
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        syslog(LOG_ERR, "Ошибка привязки TCP сокета: %s", strerror(errno));
+        close(sock);
+        return -1;
+    }
+
+    if (listen(sock, 5) < 0) {
+        syslog(LOG_ERR, "Ошибка listen на TCP сокете: %s", strerror(errno));
+        close(sock);
+        return -1;
+    }
+
+    syslog(LOG_INFO, "TCP listener на порту %d", port);
+    return sock;
 }
 
 /**
@@ -270,5 +308,132 @@ void handle_client_request(const void *buffer, size_t size,
     free(data);
 
     syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен", ip, port);
+}
+
+int get_tcp_socket(void) {
+    return g_tcp_sock;
+}
+
+int start_tcp_listener(void) {
+    g_tcp_sock = create_tcp_socket(NTPQ_PORT);
+    return g_tcp_sock;
+}
+
+void stop_tcp_listener(void) {
+    if (g_tcp_sock >= 0) {
+        close(g_tcp_sock);
+        g_tcp_sock = -1;
+    }
+}
+
+static void handle_ntpq_request(int client_fd) {
+    char buffer[1024];
+    ssize_t n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+
+    if (n <= 0) {
+        if (n < 0) {
+            syslog(LOG_WARNING, "Ошибка чтения от ntpq клиента: %s", strerror(errno));
+        }
+        close(client_fd);
+        return;
+    }
+
+    buffer[n] = '\0';
+    syslog(LOG_DEBUG, "ntpq запрос: %.*s", (int)n, buffer);
+
+    char response[1024];
+    int resp_len = 0;
+
+    if (strncmp(buffer, "version", 7) == 0) {
+        resp_len = snprintf(response, sizeof(response), "ntpd %s\r\n", VERSION);
+    } else if (strncmp(buffer, "associations", 12) == 0) {
+        pthread_mutex_lock(&g_mutex);
+        bool synced = g_time_synced;
+        uint8_t stratum = g_local_stratum;
+        pthread_mutex_unlock(&g_mutex);
+        resp_len = snprintf(response, sizeof(response),
+            "ind\tassid\tstatus\tconf\treach\tcondition\tlast_event\n"
+            "1\t1\t%s\t0\t377\tsynchronized\t1\n",
+            synced ? (stratum <= 15 ? "6" : "3") : "3");
+    } else if (strncmp(buffer, "sysinfo", 7) == 0) {
+        pthread_mutex_lock(&g_mutex);
+        uint8_t stratum = g_local_stratum;
+        int8_t poll = g_local_poll;
+        int8_t precision = g_local_precision;
+        uint32_t root_delay = g_local_root_delay;
+        uint32_t root_disp = g_local_root_disp;
+        uint8_t local_li = g_local_li;
+        pthread_mutex_unlock(&g_mutex);
+        resp_len = snprintf(response, sizeof(response),
+            "system peer: LOCAL(0)\n"
+            "stratum: %u\n"
+            "poll: %d\n"
+            "precision: %d\n"
+            "root delay: %u ms\n"
+            "root dispersion: %u ms\n"
+            "leap: %02x\n",
+            stratum, (int)poll, (int)precision,
+            ntohl(root_delay) >> 16,
+            ntohl(root_disp) >> 16,
+            local_li);
+    } else if (strncmp(buffer, "quit", 4) == 0) {
+        resp_len = snprintf(response, sizeof(response), "OK\r\n");
+        send(client_fd, response, (size_t)resp_len, 0);
+        close(client_fd);
+        return;
+    } else {
+        resp_len = snprintf(response, sizeof(response), "OK\r\n");
+    }
+
+    if (resp_len > 0 && send(client_fd, response, (size_t)resp_len, 0) < 0) {
+        syslog(LOG_WARNING, "Ошибка отправки ответа ntpq: %s", strerror(errno));
+    }
+
+    close(client_fd);
+}
+
+static void *tcp_accept_thread(void *arg) {
+    (void)arg;
+
+    syslog(LOG_INFO, "TCP accept thread запущен для ntpq");
+
+    while (1) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+
+        int client_fd = accept(g_tcp_sock, (struct sockaddr *)&client_addr, &client_len);
+        if (client_fd < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            syslog(LOG_ERR, "Ошибка accept: %s", strerror(errno));
+            break;
+        }
+
+        char client_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+        syslog(LOG_DEBUG, "ntpq подключение от %s:%d", client_ip, ntohs(client_addr.sin_port));
+
+        handle_ntpq_request(client_fd);
+    }
+
+    return NULL;
+}
+
+int start_ntpq_thread(void) {
+    if (g_tcp_sock < 0) {
+        syslog(LOG_ERR, "TCP сокет не инициализирован");
+        return -1;
+    }
+
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, tcp_accept_thread, NULL) != 0) {
+        syslog(LOG_ERR, "Ошибка создания TCP потока: %s", strerror(errno));
+        return -1;
+    }
+
+    pthread_detach(thread);
+    syslog(LOG_INFO, "ntpq thread запущен");
+    return 0;
 }
 

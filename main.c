@@ -25,6 +25,9 @@ IdoState g_ido_state;
 void cleanup_resources(void) {
     syslog(LOG_INFO, "Очистка ресурсов...");
 
+    /* Остановка TCP listener для ntpq */
+    stop_tcp_listener();
+
     /* Остановка потока коррекции часов */
     stop_clock_thread();
     cleanup_clock_thread();
@@ -272,6 +275,18 @@ int main(int argc, char *argv[]) {
         }
     } else {
         syslog(LOG_WARNING, "Не удалось создать сокет для потока пэеров");
+    }
+
+    /* Запуск TCP listener для ntpq (RFC 5905 Section 6) */
+    if (start_tcp_listener() >= 0) {
+        if (start_ntpq_thread() != 0) {
+            syslog(LOG_WARNING, "Не удалось запустить ntpq thread");
+            stop_tcp_listener();
+        } else {
+            syslog(LOG_INFO, "ntpq listener запущен на порту 323");
+        }
+    } else {
+        syslog(LOG_WARNING, "Не удалось создать TCP сокет для ntpq");
     }
 
     while (1) {
