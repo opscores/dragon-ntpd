@@ -185,19 +185,15 @@ static void signal_handler(int sig) {
 }
 
 int main(int argc, char *argv[]) {
-    /* Check for help and version flags in any position */
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            print_usage(argv[0]);
-            exit(EXIT_SUCCESS);
-        }
-        if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
-            print_version();
-            exit(EXIT_SUCCESS);
-        }
-    }
+    int parse_ret = parse_arguments(argc, argv);
 
-    if (parse_arguments(argc, argv) != 0) {
+    if (parse_ret == 2) {
+        return EXIT_SUCCESS;
+    }
+    if (parse_ret == 3) {
+        return EXIT_SUCCESS;
+    }
+    if (parse_ret != 0) {
         return EXIT_FAILURE;
     }
 
