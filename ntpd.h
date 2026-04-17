@@ -5,6 +5,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
+#include "ido.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -77,30 +78,6 @@ typedef struct {
     NtpTimestamp xmit_ts;
     size_t extension_len;
 } NtpPacket;
-
-/* I-DO Capability Negotiation State (RFC 5905 Section 8.4) */
-typedef struct {
-    uint8_t  ido_state;              /* I-DO state machine */
-    uint8_t  ido_offer_received;     /* I-DO Offer received from server */
-    uint8_t  ido_response_sent;      /* I-DO Response sent to server */
-    uint8_t  ido_capabilities;       /* Capability flags */
-    uint32_t ido_key_id;             /* Key identifier */
-    uint8_t  ido_key[16];            /* MAC key (128-bit) */
-    bool     ido_enabled;            /* I-DO enabled */
-    bool     ido_authenticated;      /* Authentication established */
-} IdoState;
-
-/* I-DO State Machine States (RFC 5905 Section 8.4) */
-#define IDO_STATE_IDLE              0
-#define IDO_STATE_OFFER_RECEIVED    1
-#define IDO_STATE_RESPONSE_SENT     2
-#define IDO_STATE_AUTHENTICATED     3
-#define IDO_STATE_REJECTED          4
-
-/* I-DO Capability Flags (RFC 5905 Section 8.4) */
-#define IDO_CAP_OFFER               (1 << 0)  /* I-DO Offer capability */
-#define IDO_CAP_RESPONSE            (1 << 1)  /* I-DO Response capability */
-#define IDO_CAP_RESERVED            (1 << 2)  /* Reserved */
 
 typedef struct {
     char *ip;
@@ -209,15 +186,6 @@ int create_udp_socket(int port);
 void close_socket(int sock);
 int get_sync_socket(void);
 void handle_client_request(const void *buffer, size_t size, const char *ip, const char *port);
-
-/* I-DO functions (RFC 5905 Section 8.4) */
-void ido_state_init(IdoState *state);
-void ido_state_cleanup(IdoState *state);
-int process_ido_offer(const uint8_t *data, size_t len, IdoState *state);
-int process_ido_response(const uint8_t *data, size_t len, IdoState *state);
-int ido_state_machine(IdoState *state, bool offer_received, bool response_sent);
-bool ido_is_authenticated(void);
-void ido_log_state(void);
 
 /* Threads functions (RFC 5905 Section 5) */
 int start_clock_thread(int interval_sec);
