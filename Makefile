@@ -1,7 +1,7 @@
 CC ?= cc
 
 TARGET := ntpd
-SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c
+SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c mode_handler.c
 
 CSTD := -std=c11
 

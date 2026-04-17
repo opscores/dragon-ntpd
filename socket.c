@@ -1,4 +1,5 @@
 #include "ntpd.h"
+#include "mode_handler.h"
 #include <stdlib.h>
 #include <sys/select.h>
 
@@ -154,16 +155,37 @@ static void *handle_peer_request_thread(void *arg) {
     uint8_t vn = (uint8_t)((pkt.li_vn_mode & NTP_VN_MASK) >> NTP_VN_SHIFT);
     uint8_t mode = (uint8_t)(pkt.li_vn_mode & NTP_MODE_MASK);
 
+    if (validate_ntp_version(vn) != 0) {
+        syslog(LOG_WARNING, "Неверная версия NTP: %u от %s:%s", vn, ip, port);
+        free(data->buffer);
+        free(data);
+        return NULL;
+    }
+
+    if (!acl_check_client(ip, mode)) {
+        syslog(LOG_WARNING, "ACL отклонён: mode=%u от %s:%s", mode, ip, port);
+        free(data->buffer);
+        free(data);
+        return NULL;
+    }
+
+    if (rate_limit_check(ip)) {
+        syslog(LOG_WARNING, "Rate limit превышен: %s:%s", ip, port);
+        free(data->buffer);
+        free(data);
+        return NULL;
+    }
+
     uint8_t response_mode = 4;
     if (mode == 1 || mode == 2) {
         response_mode = 2;
-        syslog(LOG_INFO, "Symmetric mode %d от %s:%s", mode, ip, port);
     } else if (mode == 3) {
         response_mode = 4;
     } else if (mode == 5) {
-        syslog(LOG_INFO, "Broadcast request от %s:%s", ip, port);
     } else {
         syslog(LOG_WARNING, "Неизвестный mode %u от %s:%s", mode, ip, port);
+        free(data->buffer);
+        free(data);
         return NULL;
     }
 
@@ -202,12 +224,12 @@ static void *handle_peer_request_thread(void *arg) {
     uint8_t out_li_state;
     pthread_mutex_lock(&g_mutex);
     synced = g_time_synced;
-    out_stratum = g_local_stratum;
-    out_ref_id = g_local_ref_id;
+    out_stratum = mode_get_default_stratum();
+    out_ref_id = mode_get_default_ref_id();
     out_ref_ts = g_local_ref_ts;
     out_root_delay = g_local_root_delay;
     out_root_disp = g_local_root_disp;
-    out_li_state = g_local_li;
+    out_li_state = mode_get_default_li();
     pthread_mutex_unlock(&g_mutex);
 
     uint8_t out_li = synced ? out_li_state : 3u;
@@ -280,6 +302,8 @@ static void *handle_peer_request_thread(void *arg) {
     }
 
     close(sock);
+
+    rate_limit_update(ip);
 
     syslog(LOG_INFO, "Поток обработки запроса от %s:%s завершён", ip, port);
 

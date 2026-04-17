@@ -40,6 +40,9 @@ void cleanup_resources(void) {
     /* Очистка I-DO state (RFC 5905 Section 8.4) */
     ido_state_cleanup(&g_ido_state);
 
+    /* Очистка mode handler */
+    mode_handler_cleanup();
+
     if (g_cli.pid_file != NULL) {
         if (unlink(g_cli.pid_file) == 0) {
             syslog(LOG_INFO, "PID файл удалён: %s", g_cli.pid_file);
@@ -267,6 +270,12 @@ int main(int argc, char *argv[]) {
         closelog();
         return EXIT_FAILURE;
     }
+
+    /* Инициализация mode handler (Security-First) */
+    if (mode_handler_init() != 0) {
+        syslog(LOG_WARNING, "Ошибка инициализации mode handler");
+    }
+    mode_handler_parse_config("/etc/time_sync/modes.conf");
 
     /* Инициализация I-DO state (RFC 5905 Section 8.4) */
     ido_state_init(&g_ido_state);

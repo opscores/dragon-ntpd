@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include "ido.h"
+#include "mode_handler.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -217,5 +218,21 @@ int start_peer_thread(int sock_fd, const char *ip, const char *port,
                       PeerState *peer_state);
 void stop_peer_thread(void);
 void cleanup_peer_thread(void);
+
+/* Mode handler and ACL (Security-First) */
+int mode_handler_init(void);
+void mode_handler_cleanup(void);
+int mode_handler_set_config(const ModeConfig *config);
+int mode_handler_get_config(ModeConfig *config);
+int acl_add_entry(const char *network, uint8_t flags);
+int acl_check_client(const char *client_ip, uint8_t packet_mode);
+uint8_t acl_get_client_flags(const char *client_ip);
+int rate_limit_check(const char *client_ip);
+void rate_limit_update(const char *client_ip);
+uint8_t mode_get_default_li(void);
+uint8_t mode_get_default_stratum(void);
+uint32_t mode_get_default_ref_id(void);
+int validate_packet_mode(uint8_t mode, size_t req_size, size_t resp_size);
+int mode_handler_parse_config(const char *config_file);
 
 #endif
