@@ -39,6 +39,14 @@ Extension fields support (RFC 5905, RFC 8915 NTS)
 Kiss-o'-Death marker handling
 .IP \(bu 2
 I-DO capability negotiation
+.IP \(bu 2
+IPv4/IPv6 dual-stack support (AF_INET6)
+.IP \(bu 2
+Multicast support (RFC 5905 Section 5.2, IPv6-only MLDv2)
+.IP \(bu 2
+Thread-safe error handling (strerror_r)
+.IP \(bu 2
+Improved error messages and diagnostics
 .P
 Note: Full cryptographic authentication (MD5 MAC, Autokey) is planned for future releases.
 .SH OPTIONS
@@ -80,7 +88,10 @@ Graceful shutdown
 Bind to specific network interface
 .TP
 .BI \-4 " ipv4-only"
-Bind to IPv4 addresses only
+Bind to IPv4 addresses only (disable IPv6)
+.TP
+.BI \-6 " ipv6-only"
+Bind to IPv6 addresses only (disable IPv4)
 .TP
 .BI \-u " user"
 Run as specified user (after daemonizing)
@@ -371,6 +382,9 @@ Process ID file (when running as daemon)
 .TP
 .B /etc/ntpd.conf
 Alternative configuration file location
+.TP
+.B /var/run/ntpd.sock
+Unix socket for local NTP communication
 .SH SEE ALSO
 .BR ntpdate (8),
 .BR chronyd (8),
