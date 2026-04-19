@@ -326,7 +326,7 @@ int accept_network_connection(int sock, NetworkClientInfo *client_info)
 	socklen_t addr_len;
 	int sock_type;
 	int family;
-	int ret;
+	ssize_t ret;
 
 	if (!is_valid_socket(sock) || !client_info) {
 		errno = EINVAL;
