@@ -90,62 +90,62 @@
 #define NTP_UNIX_EPOCH_DELTA 2208988800UL
 
 typedef struct {
-  uint32_t sec;
-  uint32_t frac;
+    uint32_t sec;
+    uint32_t frac;
 } NtpTimestamp;
 
 typedef struct {
-  uint8_t li_vn_mode;
-  uint8_t stratum;
-  int8_t poll;
-  int8_t precision;
-  uint32_t root_delay;
-  uint32_t root_disp;
-  uint32_t ref_id;
-  NtpTimestamp ref_ts;
-  NtpTimestamp orig_ts;
-  NtpTimestamp recv_ts;
-  NtpTimestamp xmit_ts;
-  size_t extension_len;
+    uint8_t li_vn_mode;
+    uint8_t stratum;
+    int8_t poll;
+    int8_t precision;
+    uint32_t root_delay;
+    uint32_t root_disp;
+    uint32_t ref_id;
+    NtpTimestamp ref_ts;
+    NtpTimestamp orig_ts;
+    NtpTimestamp recv_ts;
+    NtpTimestamp xmit_ts;
+    size_t extension_len;
 } NtpPacket;
 
 typedef struct {
-  char *ip;
-  char *port;
-  time_t next_allowed_sync;
+    char* ip;
+    char* port;
+    time_t next_allowed_sync;
 } ServerConfig;
 
 typedef struct {
-  uint64_t ts;
-  uint64_t delay;
-  int64_t offset;
+    uint64_t ts;
+    uint64_t delay;
+    int64_t offset;
 } NtpSample;
 
 typedef struct {
-  char ip[64];
-  char port[16];
-  uint8_t stratum;
-  uint64_t delay_us;
-  int64_t offset_us;
-  uint64_t jitter_us;
-  uint32_t root_disp;
-  time_t last_update;
-  bool reachable;
+    char ip[64];
+    char port[16];
+    uint8_t stratum;
+    uint64_t delay_us;
+    int64_t offset_us;
+    uint64_t jitter_us;
+    uint32_t root_disp;
+    time_t last_update;
+    bool reachable;
 } PeerState;
 
 typedef struct {
-  void *buffer;
-  size_t size;
-  char ip[INET_ADDRSTRLEN];
-  char port[16];
+    void* buffer;
+    size_t size;
+    char ip[INET_ADDRSTRLEN];
+    char port[16];
 } PeerRequestData;
 
 /* RFC 5905 Section 11.3 - Clock Discipline State */
 typedef struct {
-  double ppm;
-  time_t last_update;
-  int64_t last_offset_us;
-  int state;
+    double ppm;
+    time_t last_update;
+    int64_t last_offset_us;
+    int state;
 } FreqState;
 
 /* Clock discipline states */
@@ -154,25 +154,25 @@ typedef struct {
 #define FREQ_STATE_SYNC 2
 
 typedef struct {
-  char *config_file;
-  char *pid_file;
-  char *log_file;
-  char *run_user;
-  char *interface;
-  int foreground;
-  int debug_level;
-  int no_daemonize;
-  int timeout_sec;
-  int quit_after_sync;
-  int family_preference; /* 0=dual-stack, 1=IPv4-only, 2=IPv6-only */
+    char* config_file;
+    char* pid_file;
+    char* log_file;
+    char* run_user;
+    char* interface;
+    int foreground;
+    int debug_level;
+    int no_daemonize;
+    int timeout_sec;
+    int quit_after_sync;
+    int family_preference; /* 0=dual-stack, 1=IPv4-only, 2=IPv6-only */
 
-  /* RFC 5905 Section 5.2 - Broadcast mode */
-  int broadcast_mode;     /* 0=disabled, 1=enabled */
-  char *broadcast_addr;   /* Custom broadcast address (NULL = default) */
-  int broadcast_interval; /* Interval in seconds (32-128, default: 64) */
+    /* RFC 5905 Section 5.2 - Broadcast mode */
+    int broadcast_mode;     /* 0=disabled, 1=enabled */
+    char* broadcast_addr;   /* Custom broadcast address (NULL = default) */
+    int broadcast_interval; /* Interval in seconds (32-128, default: 64) */
 } CliConfig;
 
-extern ServerConfig *g_servers;
+extern ServerConfig* g_servers;
 extern int g_server_count;
 extern NtpSample g_samples[MAX_SAMPLES];
 extern int g_sample_count;
@@ -198,46 +198,42 @@ extern CliConfig g_cli;
 extern int g_sync_sock;
 extern pthread_mutex_t g_mutex;
 
-void print_usage(const char *prog);
+void print_usage(const char* prog);
 void print_version(void);
-int parse_arguments(int argc, char *argv[]);
+int parse_arguments(int argc, char* argv[]);
 int load_server_config(void);
 void cleanup_resources(void);
-int apply_user_privileges(const char *username);
+int apply_user_privileges(const char* username);
 
-uint32_t read_u32be(const uint8_t *p);
-void write_u32be(uint8_t *p, uint32_t v);
-bool parse_ntp_packet(const void *buffer, size_t size, NtpPacket *pkt);
-void create_ntp_request(void *buffer, NtpTimestamp *xmit_out);
-bool ntp_is_kod(const NtpPacket *pkt);
+uint32_t read_u32be(const uint8_t* p);
+void write_u32be(uint8_t* p, uint32_t v);
+bool parse_ntp_packet(const void* buffer, size_t size, NtpPacket* pkt);
+void create_ntp_request(void* buffer, NtpTimestamp* xmit_out);
+bool ntp_is_kod(const NtpPacket* pkt);
 
-int64_t ntp_timestamp_to_ns(const NtpTimestamp *ts);
-bool calculate_delay_offset(const NtpTimestamp *t1, const NtpTimestamp *t2,
-                            const NtpTimestamp *t3, const NtpTimestamp *t4,
-                            uint64_t *delay_us, int64_t *offset_us);
+int64_t ntp_timestamp_to_ns(const NtpTimestamp* ts);
+bool calculate_delay_offset(const NtpTimestamp* t1, const NtpTimestamp* t2, const NtpTimestamp* t3, const NtpTimestamp* t4, uint64_t* delay_us,
+                            int64_t* offset_us);
 bool handle_leap_indicator(uint8_t li);
 uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum);
-uint8_t compute_system_offset(int64_t *offsets, int count, int *best_idx);
-int select_best_peers(const int64_t *offsets, const uint64_t *jitter, int count,
-                      int *valid_indices, int *valid_count);
-int64_t majority_vote(const int64_t *offsets, int count);
+uint8_t compute_system_offset(int64_t* offsets, int count, int* best_idx);
+int select_best_peers(const int64_t* offsets, const uint64_t* jitter, int count, int* valid_indices, int* valid_count);
+int64_t majority_vote(const int64_t* offsets, int count);
 bool is_false_ticker(int64_t peer_offset, int64_t cluster_offset);
-uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us,
-                                uint64_t jitter_us);
-int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll,
-                            uint64_t delay_us, int64_t offset_us);
+uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us);
+int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us);
 uint32_t ntp_u16_16_from_us(uint64_t us);
 
 void marx_add_sample_us(uint64_t ts_ns, uint64_t delay_us, int64_t offset_us);
 void marx_remove_sample(int index);
-uint64_t marx_median(uint64_t *arr, int count);
-int marx_filter_outliers(NtpSample *samples, int count, int k);
+uint64_t marx_median(uint64_t* arr, int count);
+int marx_filter_outliers(NtpSample* samples, int count, int k);
 uint64_t ntp_offset_jitter_us_locked(void);
 
 NtpTimestamp ntp_timestamp_now(void);
 int8_t get_system_precision(void);
 int apply_time_correction_slew_or_step(int64_t offset_us);
-int sync_ntp_time(const char *ip, const char *port);
+int sync_ntp_time(const char* ip, const char* port);
 
 /* RFC 5905 Section 11.3 - Frequency Adjustment */
 int init_frequency_discipline(void);
@@ -250,8 +246,7 @@ int update_frequency_discipline(int64_t offset_us, int poll_exp);
 int create_udp_socket(int port);
 void close_socket(int sock);
 int get_sync_socket(void);
-void handle_client_request(const void *buffer, size_t size, const char *ip,
-                           const char *port);
+void handle_client_request(const void* buffer, size_t size, const char* ip, const char* port);
 
 /* TCP ntpq listener (RFC 5905 Section 6) */
 int create_tcp_socket(int port);
@@ -264,27 +259,26 @@ int start_ntpq_thread(void);
 int start_clock_thread(int interval_sec);
 void stop_clock_thread(void);
 void cleanup_clock_thread(void);
-int start_peer_thread(int sock_fd, const char *ip, const char *port,
-                      PeerState *peer_state);
+int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* peer_state);
 void stop_peer_thread(void);
 void cleanup_peer_thread(void);
 
 /* Mode handler and ACL (Security-First) */
 int mode_handler_init(void);
 void mode_handler_cleanup(void);
-int mode_handler_set_config(const ModeConfig *config);
-int mode_handler_get_config(ModeConfig *config);
-int acl_add_entry(const char *network, uint8_t flags);
-int acl_check_client(const char *client_ip, uint8_t packet_mode);
-uint8_t acl_get_client_flags(const char *client_ip);
-int rate_limit_check(const char *client_ip);
-void rate_limit_update(const char *client_ip);
+int mode_handler_set_config(const ModeConfig* config);
+int mode_handler_get_config(ModeConfig* config);
+int acl_add_entry(const char* network, uint8_t flags);
+int acl_check_client(const char* client_ip, uint8_t packet_mode);
+uint8_t acl_get_client_flags(const char* client_ip);
+int rate_limit_check(const char* client_ip);
+void rate_limit_update(const char* client_ip);
 uint8_t mode_get_default_li(void);
 uint8_t mode_get_default_stratum(void);
 uint32_t mode_get_default_ref_id(void);
 int validate_packet_mode(uint8_t mode, size_t req_size, size_t resp_size);
-int validate_packet_authentication(const void *buffer, size_t size);
+int validate_packet_authentication(const void* buffer, size_t size);
 int check_panic_condition(int64_t time_offset);
-int mode_handler_parse_config(const char *config_file);
+int mode_handler_parse_config(const char* config_file);
 
 #endif

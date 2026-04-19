@@ -32,13 +32,7 @@
 #include <stdint.h>
 
 /* I-DO State Machine States */
-typedef enum {
-  IDO_STATE_IDLE = 0,
-  IDO_STATE_OFFER_RECEIVED,
-  IDO_STATE_RESPONSE_SENT,
-  IDO_STATE_AUTHENTICATED,
-  IDO_STATE_REJECTED
-} IdoState_t;
+typedef enum { IDO_STATE_IDLE = 0, IDO_STATE_OFFER_RECEIVED, IDO_STATE_RESPONSE_SENT, IDO_STATE_AUTHENTICATED, IDO_STATE_REJECTED } IdoState_t;
 
 /* I-DO Capability Flags */
 #define IDO_CAP_OFFER (0x01)    /* Server offers authentication */
@@ -51,14 +45,14 @@ typedef enum {
 
 /* I-DO State Structure */
 typedef struct {
-  uint8_t ido_state;          /* Current state machine state */
-  uint8_t ido_offer_received; /* I-DO Offer received from server */
-  uint8_t ido_response_sent;  /* I-DO Response sent to server */
-  uint8_t ido_capabilities;   /* Capability flags */
-  uint8_t ido_key_id;         /* Key identifier (for future) */
-  uint8_t ido_key[16];        /* MAC key (for future, 128-bit) */
-  uint8_t ido_enabled;        /* I-DO enabled flag */
-  uint8_t ido_authenticated;  /* Authentication established */
+    uint8_t ido_state;          /* Current state machine state */
+    uint8_t ido_offer_received; /* I-DO Offer received from server */
+    uint8_t ido_response_sent;  /* I-DO Response sent to server */
+    uint8_t ido_capabilities;   /* Capability flags */
+    uint8_t ido_key_id;         /* Key identifier (for future) */
+    uint8_t ido_key[16];        /* MAC key (for future, 128-bit) */
+    uint8_t ido_enabled;        /* I-DO enabled flag */
+    uint8_t ido_authenticated;  /* Authentication established */
 } IdoState;
 
 /* I-DO State Machine Functions */
@@ -77,7 +71,7 @@ typedef struct {
  * - Enabled: false
  * - Authenticated: false
  */
-void ido_state_init(IdoState *ido_state);
+void ido_state_init(IdoState* ido_state);
 
 /**
  * Cleanup I-DO state machine
@@ -85,7 +79,7 @@ void ido_state_init(IdoState *ido_state);
  *
  * Cleans up I-DO state (optional, for resource management)
  */
-void ido_state_cleanup(IdoState *ido_state);
+void ido_state_cleanup(IdoState* ido_state);
 
 /**
  * Process I-DO Offer extension field
@@ -103,8 +97,7 @@ void ido_state_cleanup(IdoState *ido_state);
  *
  * Returns true if offer processed successfully, false otherwise
  */
-bool ido_process_offer(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length,
-                       const uint8_t *ef_data);
+bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
 
 /**
  * Process I-DO Response extension field
@@ -122,8 +115,7 @@ bool ido_process_offer(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length,
  *
  * Returns true if response processed successfully, false otherwise
  */
-bool ido_process_response(IdoState *ido_state, uint16_t ef_type,
-                          uint8_t ef_length, const uint8_t *ef_data);
+bool ido_process_response(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
 
 /**
  * Process I-DO extension field (unified interface)
@@ -138,8 +130,7 @@ bool ido_process_response(IdoState *ido_state, uint16_t ef_type,
  *
  * Returns true if extension field processed successfully, false otherwise
  */
-bool ido_process(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length,
-                 const uint8_t *ef_data);
+bool ido_process(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
 
 /**
  * Process I-DO extension field (skip mode for parsing)
@@ -155,7 +146,7 @@ bool ido_process(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length,
  *
  * Returns true if extension field is valid I-DO, false otherwise
  */
-bool ido_process_skip(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length);
+bool ido_process_skip(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length);
 
 /**
  * State machine transition handler
@@ -170,7 +161,7 @@ bool ido_process_skip(IdoState *ido_state, uint16_t ef_type, uint8_t ef_length);
  *
  * Returns new state after transition
  */
-uint8_t ido_state_machine(IdoState *ido_state, uint8_t event);
+uint8_t ido_state_machine(IdoState* ido_state, uint8_t event);
 
 /**
  * Check if I-DO is authenticated
@@ -178,7 +169,7 @@ uint8_t ido_state_machine(IdoState *ido_state, uint8_t event);
  *
  * Returns true if I-DO authentication is established, false otherwise
  */
-bool ido_is_authenticated(const IdoState *ido_state);
+bool ido_is_authenticated(const IdoState* ido_state);
 
 /**
  * Log I-DO state
@@ -186,7 +177,7 @@ bool ido_is_authenticated(const IdoState *ido_state);
  *
  * Logs current I-DO state for debugging
  */
-void ido_log_state(const IdoState *ido_state);
+void ido_log_state(const IdoState* ido_state);
 
 /**
  * Get I-DO state name
@@ -194,7 +185,7 @@ void ido_log_state(const IdoState *ido_state);
  *
  * Returns human-readable state name
  */
-const char *ido_state_name(uint8_t state);
+const char* ido_state_name(uint8_t state);
 
 /**
  * Get I-DO capability flag name
@@ -202,6 +193,6 @@ const char *ido_state_name(uint8_t state);
  *
  * Returns human-readable flag name
  */
-const char *ido_capability_name(uint8_t flag);
+const char* ido_capability_name(uint8_t flag);
 
 #endif /* IDO_H */

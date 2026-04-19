@@ -20,8 +20,7 @@
  * @note Поток автоматически очищает ресурсы при завершении.
  * ============================================================================
  */
-int start_peer_thread(int sock_fd, const char *ip, const char *port,
-                      PeerState *peer_state);
+int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* peer_state);
 
 /* ============================================================================
  * stop_peer_thread - Остановка потока обработки пэера

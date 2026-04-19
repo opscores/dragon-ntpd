@@ -83,13 +83,13 @@
  * - Compatible with standard POSIX socket API
  */
 typedef struct {
-  int family;    /* AF_INET or AF_INET6 (hot field) */
-  uint16_t port; /* Network byte order (hot field) */
-  int is_v6;     /* 1 if IPv6 address, 0 otherwise (hot field) */
-  union {
-    struct sockaddr_in addr_in4;  /* IPv4 address */
-    struct sockaddr_in6 addr_in6; /* IPv6 address */
-  } addr; /* 28 bytes, placed last for cache alignment */
+    int family;    /* AF_INET or AF_INET6 (hot field) */
+    uint16_t port; /* Network byte order (hot field) */
+    int is_v6;     /* 1 if IPv6 address, 0 otherwise (hot field) */
+    union {
+        struct sockaddr_in addr_in4;  /* IPv4 address */
+        struct sockaddr_in6 addr_in6; /* IPv6 address */
+    } addr;                           /* 28 bytes, placed last for cache alignment */
 } NetworkAddress;
 
 /*
@@ -105,39 +105,39 @@ typedef struct {
  * and multicast group memberships for RFC 5905 compliance.
  */
 typedef struct {
-  int fd;              /* Socket file descriptor */
-  int family;          /* AF_INET or AF_INET6 */
-  int type;            /* SOCK_DGRAM or SOCK_STREAM */
-  int protocol;        /* IPPROTO_UDP or IPPROTO_TCP */
-  uint16_t local_port; /* Local port (network byte order) */
-  bool is_udp;         /* True for UDP (NTP primary) */
-  bool is_tcp;         /* True for TCP (ntpq secondary) */
-  bool is_dual_stack;  /* True if AF_INET6 (supports both) */
+    int fd;              /* Socket file descriptor */
+    int family;          /* AF_INET or AF_INET6 */
+    int type;            /* SOCK_DGRAM or SOCK_STREAM */
+    int protocol;        /* IPPROTO_UDP or IPPROTO_TCP */
+    uint16_t local_port; /* Local port (network byte order) */
+    bool is_udp;         /* True for UDP (NTP primary) */
+    bool is_tcp;         /* True for TCP (ntpq secondary) */
+    bool is_dual_stack;  /* True if AF_INET6 (supports both) */
 
-  /* Multicast support (RFC 5905 Section 5.2) */
-  struct {
-    bool enabled; /* Multicast enabled */
+    /* Multicast support (RFC 5905 Section 5.2) */
     struct {
-      char address[INET6_ADDRSTRLEN]; /* Multicast address */
-      uint16_t port;                  /* Multicast port */
-      int ttl;                        /* Time-to-live */
-      int interface_index;            /* Interface index */
-    } mcast;
-    struct {
-      int count; /* Number of groups */
-      struct {
-        struct ipv6_mreq mreq; /* IPv6 multicast group */
-        time_t join_time;      /* When joined */
-      } groups[NETWORK_MAX_MULTICAST_GROUPS];
-    } memberships;
-  } multicast;
+        bool enabled; /* Multicast enabled */
+        struct {
+            char address[INET6_ADDRSTRLEN]; /* Multicast address */
+            uint16_t port;                  /* Multicast port */
+            int ttl;                        /* Time-to-live */
+            int interface_index;            /* Interface index */
+        } mcast;
+        struct {
+            int count; /* Number of groups */
+            struct {
+                struct ipv6_mreq mreq; /* IPv6 multicast group */
+                time_t join_time;      /* When joined */
+            } groups[NETWORK_MAX_MULTICAST_GROUPS];
+        } memberships;
+    } multicast;
 
-  /* Transition mechanisms (RFC 6052 / RFC 6147) */
-  struct {
-    bool nat64_enabled;    /* NAT64 support */
-    bool dns64_enabled;    /* DNS64 support */
-    char nat64_prefix[64]; /* NAT64 prefix (::ip6.arpa) */
-  } transition;
+    /* Transition mechanisms (RFC 6052 / RFC 6147) */
+    struct {
+        bool nat64_enabled;    /* NAT64 support */
+        bool dns64_enabled;    /* DNS64 support */
+        char nat64_prefix[64]; /* NAT64 prefix (::ip6.arpa) */
+    } transition;
 } NetworkSocket;
 
 /*
@@ -156,49 +156,49 @@ typedef struct {
  * - Transition mechanisms
  */
 typedef struct {
-  /* Address family preference */
-  enum {
-    NETWORK_FAMILY_IPV4_ONLY,
-    NETWORK_FAMILY_IPV6_ONLY,
-    NETWORK_FAMILY_DUAL_STACK /* Default: AF_INET6 */
-  } family_preference;
+    /* Address family preference */
+    enum {
+        NETWORK_FAMILY_IPV4_ONLY,
+        NETWORK_FAMILY_IPV6_ONLY,
+        NETWORK_FAMILY_DUAL_STACK /* Default: AF_INET6 */
+    } family_preference;
 
-  /* Port configuration */
-  uint16_t ntp_port;  /* NTP UDP port (default: 123) */
-  uint16_t ntpq_port; /* NTPQ TCP port (default: 323) */
+    /* Port configuration */
+    uint16_t ntp_port;  /* NTP UDP port (default: 123) */
+    uint16_t ntpq_port; /* NTPQ TCP port (default: 323) */
 
-  /* Interface binding */
-  char interface[NETWORK_MAX_IFNAME_LEN]; /* Empty = any interface */
+    /* Interface binding */
+    char interface[NETWORK_MAX_IFNAME_LEN]; /* Empty = any interface */
 
-  /* Multicast configuration (RFC 5905 Section 5.2) */
-  struct {
-    bool enabled;                   /* Enable multicast */
-    char address[INET6_ADDRSTRLEN]; /* Multicast address */
-    uint16_t port;                  /* Multicast port */
-    int ttl;                        /* Time-to-live (0 = default) */
-    int interface_index;            /* Interface index (-1 = default) */
-  } multicast;
+    /* Multicast configuration (RFC 5905 Section 5.2) */
+    struct {
+        bool enabled;                   /* Enable multicast */
+        char address[INET6_ADDRSTRLEN]; /* Multicast address */
+        uint16_t port;                  /* Multicast port */
+        int ttl;                        /* Time-to-live (0 = default) */
+        int interface_index;            /* Interface index (-1 = default) */
+    } multicast;
 
-  /* Transition mechanisms (RFC 6052 / RFC 6147) */
-  struct {
-    bool nat64_enabled;    /* Enable NAT64 */
-    bool dns64_enabled;    /* Enable DNS64 */
-    char nat64_prefix[64]; /* NAT64 prefix */
-  } transition;
+    /* Transition mechanisms (RFC 6052 / RFC 6147) */
+    struct {
+        bool nat64_enabled;    /* Enable NAT64 */
+        bool dns64_enabled;    /* Enable DNS64 */
+        char nat64_prefix[64]; /* NAT64 prefix */
+    } transition;
 
-  /* Socket options */
-  struct {
-    bool reuse_address;   /* SO_REUSEADDR */
-    bool ipv6_v6only;     /* IPV6_V6ONLY (false for dual-stack) */
-    int recv_timeout_sec; /* Receive timeout */
-    int send_buffer_size; /* SO_SNDBUF */
-    int recv_buffer_size; /* SO_RCVBUF */
-  } options;
+    /* Socket options */
+    struct {
+        bool reuse_address;   /* SO_REUSEADDR */
+        bool ipv6_v6only;     /* IPV6_V6ONLY (false for dual-stack) */
+        int recv_timeout_sec; /* Receive timeout */
+        int send_buffer_size; /* SO_SNDBUF */
+        int recv_buffer_size; /* SO_RCVBUF */
+    } options;
 
-  /* Flags */
-  bool bind_to_interface; /* Bind to specific interface */
-  bool enable_multicast;  /* Enable multicast */
-  bool enable_transition; /* Enable transition mechanisms */
+    /* Flags */
+    bool bind_to_interface; /* Bind to specific interface */
+    bool enable_multicast;  /* Enable multicast */
+    bool enable_transition; /* Enable transition mechanisms */
 } NetworkConfig;
 
 /*
@@ -213,11 +213,11 @@ typedef struct {
  * Used for ACL checking, rate limiting, and logging.
  */
 typedef struct {
-  NetworkAddress address;                 /* Client address */
-  char address_str[NETWORK_MAX_ADDR_LEN]; /* Human-readable address */
-  char address_family_str[32];            /* "IPv4" or "IPv6" */
-  uint16_t port;                          /* Client port */
-  bool is_v6;                             /* True if IPv6 */
+    NetworkAddress address;                 /* Client address */
+    char address_str[NETWORK_MAX_ADDR_LEN]; /* Human-readable address */
+    char address_family_str[32];            /* "IPv4" or "IPv6" */
+    uint16_t port;                          /* Client port */
+    bool is_v6;                             /* True if IPv6 */
 } NetworkClientInfo;
 
 /*
@@ -242,8 +242,7 @@ typedef struct {
  * @note Socket is created in UDP mode (NTP primary protocol)
  * @note Caller must call close() on returned file descriptor
  */
-int create_network_socket(const NetworkConfig *config, char *error_buf,
-                          size_t error_buf_size);
+int create_network_socket(const NetworkConfig* config, char* error_buf, size_t error_buf_size);
 
 /**
  * Bind socket to local address and port
@@ -259,7 +258,7 @@ int create_network_socket(const NetworkConfig *config, char *error_buf,
  * @note Uses SO_REUSEADDR to allow port reuse
  * @note Falls back to IPv4 if IPv6 binding fails
  */
-int bind_network_socket(int sock, const NetworkConfig *config);
+int bind_network_socket(int sock, const NetworkConfig* config);
 
 /**
  * Accept incoming network connection
@@ -275,7 +274,7 @@ int bind_network_socket(int sock, const NetworkConfig *config);
  * @note For UDP, client_info is populated from recvfrom()
  * @note For TCP, client_info is populated from accept()
  */
-int accept_network_connection(int sock, NetworkClientInfo *client_info);
+int accept_network_connection(int sock, NetworkClientInfo* client_info);
 
 /**
  * Send data to network address
@@ -293,8 +292,7 @@ int accept_network_connection(int sock, NetworkClientInfo *client_info);
  * @note For UDP, uses sendto()
  * @note For TCP, uses send() (connection-oriented)
  */
-ssize_t sendto_network(int sock, const void *buffer, size_t length,
-                       const NetworkAddress *dest);
+ssize_t sendto_network(int sock, const void* buffer, size_t length, const NetworkAddress* dest);
 
 /**
  * Receive data from network address
@@ -313,8 +311,7 @@ ssize_t sendto_network(int sock, const void *buffer, size_t length,
  * @note For UDP, uses recvfrom() to get client address
  * @note For TCP, uses recv() (connection-oriented)
  */
-ssize_t recvfrom_network(int sock, void *buffer, size_t length,
-                         NetworkClientInfo *client_info, int flags);
+ssize_t recvfrom_network(int sock, void* buffer, size_t length, NetworkClientInfo* client_info, int flags);
 
 /**
  * Parse network address string to NetworkAddress structure
@@ -335,8 +332,7 @@ ssize_t recvfrom_network(int sock, void *buffer, size_t length,
  * @note Returns AF_INET6 for IPv6 addresses
  * @note Uses inet_pton() for address parsing (RFC 5952)
  */
-int parse_network_address(const char *addr_str, uint16_t port, int family,
-                          NetworkAddress *addr);
+int parse_network_address(const char* addr_str, uint16_t port, int family, NetworkAddress* addr);
 
 /**
  * Format NetworkAddress structure to string
@@ -354,8 +350,7 @@ int parse_network_address(const char *addr_str, uint16_t port, int family,
  * @note IPv6 addresses formatted per RFC 5952
  * @note Port appended in brackets for IPv6
  */
-size_t format_network_address(const NetworkAddress *addr, char *buf,
-                              size_t buf_size);
+size_t format_network_address(const NetworkAddress* addr, char* buf, size_t buf_size);
 
 /**
  * Check if address is loopback
@@ -364,7 +359,7 @@ size_t format_network_address(const NetworkAddress *addr, char *buf,
  *
  * @return True if loopback address
  */
-bool is_loopback_address(const NetworkAddress *addr);
+bool is_loopback_address(const NetworkAddress* addr);
 
 /**
  * Check if address is local (same host)
@@ -374,7 +369,7 @@ bool is_loopback_address(const NetworkAddress *addr);
  *
  * @return True if addresses are equal
  */
-bool addresses_equal(const NetworkAddress *addr1, const NetworkAddress *addr2);
+bool addresses_equal(const NetworkAddress* addr1, const NetworkAddress* addr2);
 
 /**
  * Close network socket
@@ -404,8 +399,7 @@ void close_network_socket(int sock);
  * @note Only works with AF_INET6 sockets
  * @note Uses setsockopt() with IPV6_JOIN_GROUP
  */
-int join_multicast_group(int sock, const char *group, uint16_t port, int ttl,
-                         int interface_index);
+int join_multicast_group(int sock, const char* group, uint16_t port, int ttl, int interface_index);
 
 /**
  * Leave multicast group (IPv6 only)
@@ -416,7 +410,7 @@ int join_multicast_group(int sock, const char *group, uint16_t port, int ttl,
  *
  * @return 0 on success, -1 on error
  */
-int leave_multicast_group(int sock, const char *group, uint16_t port);
+int leave_multicast_group(int sock, const char* group, uint16_t port);
 
 /**
  * Set socket receive timeout
@@ -480,7 +474,7 @@ int enable_ipv6_v6only(int sock, bool v6only);
  *
  * @return Human-readable family name
  */
-const char *network_family_name(int family);
+const char* network_family_name(int family);
 
 /**
  * Get network address type string
@@ -489,7 +483,7 @@ const char *network_family_name(int family);
  *
  * @return Human-readable address type ("IPv4" or "IPv6")
  */
-const char *network_address_type(const NetworkAddress *addr);
+const char* network_address_type(const NetworkAddress* addr);
 
 /**
  * Initialize network configuration with defaults
@@ -499,7 +493,7 @@ const char *network_address_type(const NetworkAddress *addr);
  * @note Sets default values for all fields
  * @note family_preference defaults to NETWORK_FAMILY_DUAL_STACK
  */
-void network_config_init(NetworkConfig *config);
+void network_config_init(NetworkConfig* config);
 
 /**
  * Validate network configuration
@@ -510,7 +504,7 @@ void network_config_init(NetworkConfig *config);
  *
  * @note Checks port ranges, interface name length, etc.
  */
-int network_config_validate(const NetworkConfig *config);
+int network_config_validate(const NetworkConfig* config);
 
 /**
  * Initialize multicast group memberships
@@ -520,7 +514,7 @@ int network_config_validate(const NetworkConfig *config);
  *
  * @return 0 on success, -1 on error
  */
-int network_init_multicast(int sock, const NetworkConfig *config);
+int network_init_multicast(int sock, const NetworkConfig* config);
 
 /**
  * Cleanup multicast group memberships
@@ -541,7 +535,7 @@ int network_cleanup_multicast(int sock);
  *
  * @return 0 on success, -1 on error
  */
-int network_enable_nat64(int sock, const char *prefix);
+int network_enable_nat64(int sock, const char* prefix);
 
 /**
  * Enable DNS64 transition mechanism
