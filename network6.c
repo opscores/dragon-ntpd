@@ -25,7 +25,6 @@
 
 int network6_create_socket(uint16_t port)
 {
-    (void)port;
     int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
         syslog(LOG_ERR, "IPv6: failed to create socket: %s", strerror(errno));
@@ -41,6 +40,8 @@ int network6_create_socket(uint16_t port)
     if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) < 0) {
         syslog(LOG_WARNING, "IPv6: IPV6_V6ONLY failed: %s", strerror(errno));
     }
+
+    syslog(LOG_DEBUG, "IPv6: socket created (port=%u)", port);
 
     return sock;
 }

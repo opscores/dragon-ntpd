@@ -60,9 +60,9 @@ int get_sync_socket(void)
 		return g_sync_sock;
 
 	if (g_cli.family_preference == 2) {
-		g_sync_sock = network6_create_socket(NTP_PORT);
+		g_sync_sock = network6_create_socket(0);
 	} else {
-		g_sync_sock = network4_create_socket(NTP_PORT);
+		g_sync_sock = network4_create_socket(0);
 	}
 
 	if (g_sync_sock < 0) {
@@ -71,6 +71,8 @@ int get_sync_socket(void)
 	}
 
 	network4_enable_reuseaddr(g_sync_sock);
+
+	syslog(LOG_DEBUG, "Sync socket created with ephemeral port (RFC 9109)");
 
 	return g_sync_sock;
 }

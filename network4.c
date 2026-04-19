@@ -22,7 +22,6 @@
 
 int network4_create_socket(uint16_t port)
 {
-    (void)port;
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
         syslog(LOG_ERR, "IPv4: failed to create socket: %s", strerror(errno));
@@ -33,6 +32,8 @@ int network4_create_socket(uint16_t port)
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
         syslog(LOG_WARNING, "IPv4: SO_REUSEADDR failed: %s", strerror(errno));
     }
+
+    syslog(LOG_DEBUG, "IPv4: socket created (port=%u)", port);
 
     return sock;
 }
