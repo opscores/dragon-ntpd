@@ -39,6 +39,7 @@
 #define VERSION "1.0.0"
 #define CONFIG_DIR "/etc/dntpd"
 #define CONFIG_FILE CONFIG_DIR "/dntpd.conf"
+#define MODES_CONFIG_FILE CONFIG_DIR "/modes.conf"
 #define NTP_PORT 123
 #define NTPQ_PORT 323
 #define BUFFER_SIZE 1024

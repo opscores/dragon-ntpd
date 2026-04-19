@@ -88,7 +88,7 @@ make ubsan   # Undefined behavior sanitizer
 
 ## Configuration
 
-Create `/etc/time_sync/servers.conf`:
+Create `/etc/dntpd/dntpd.conf`:
 
 ```
 pool.ntp.org:123

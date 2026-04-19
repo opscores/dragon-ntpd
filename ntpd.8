@@ -52,7 +52,7 @@ Note: Full cryptographic authentication (MD5 MAC, Autokey) is planned for future
 .SH OPTIONS
 .TP
 .BI \-c " file"
-Specify configuration file (default: /etc/time_sync/servers.conf)
+Specify configuration file (default: /etc/dntpd/dntpd.conf)
 .TP
 .BI \-p " port"
 Bind to specific port (default: 123)
@@ -371,8 +371,11 @@ dntpd -f -D 3
 .RE
 .SH FILES
 .TP
-.B /etc/time_sync/servers.conf
+.B /etc/dntpd/dntpd.conf
 Default configuration file containing NTP server list
+.TP
+.B /etc/dntpd/modes.conf
+Mode configuration file (optional)
 .TP
 .B /var/log/syslog
 System log containing dntpd messages

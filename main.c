@@ -275,7 +275,7 @@ int main(int argc, char *argv[]) {
     if (mode_handler_init() != 0) {
         syslog(LOG_WARNING, "Ошибка инициализации mode handler");
     }
-    mode_handler_parse_config("/etc/time_sync/modes.conf");
+    mode_handler_parse_config(MODES_CONFIG_FILE);
 
     /* Инициализация I-DO state (RFC 5905 Section 8.4) */
     ido_state_init(&g_ido_state);
