@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/home/drakon/Development/C/ntpd/dntpd
+ExecStart=/usr/sbin/dntpd
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s
@@ -23,10 +23,10 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/home/drakon/Development/C/ntpd
+ReadWritePaths=/var/lib/dntpd /var/log
 
 # Рабочая директория
-WorkingDirectory=/home/drakon/Development/C/ntpd
+WorkingDirectory=/var/lib/dntpd
 
 # Ограничения ресурсов
 LimitNOFILE=1024

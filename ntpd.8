@@ -383,11 +383,11 @@ System log containing dntpd messages
 .B /var/run/dntpd.pid
 Process ID file (when running as daemon)
 .TP
-.B /etc/dntpd.conf
-Alternative configuration file location
-.TP
 .B /var/run/dntpd.sock
 Unix socket for local NTP communication
+.TP
+.B /var/lib/dntpd/
+State directory for drift file and peer data
 .SH SEE ALSO
 .BR ntpdate (8),
 .BR chronyd (8),
