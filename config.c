@@ -10,7 +10,7 @@
 #define RET_VERSION 3
 
 CliConfig g_cli = {
-	.config_file = DEFAULT_CONFIG_FILE,
+	.config_file = CONFIG_FILE,
 	.pid_file = DEFAULT_PID_FILE,
 	.log_file = NULL,
 	.run_user = NULL,
@@ -25,14 +25,14 @@ CliConfig g_cli = {
 
 void print_usage(const char *prog)
 {
-    printf("NTP Server v%s - RFC 5905 compliant\n\n", VERSION);
+    printf("DNTPD v%s - Dragon NTP Server (RFC 5905 compliant)\n\n", VERSION);
     printf("Usage: %s [OPTIONS]\n\n", prog);
     printf("Options:\n");
     printf("  -h, --help         Show this help message\n");
     printf("  -v, --version      Show version information\n");
     printf("  -V, --verbose      Verbose output (same as -v)\n");
     printf("  -c, --config=FILE  Config file path (default: %s)\n",
-           DEFAULT_CONFIG_FILE);
+           CONFIG_FILE);
     printf("  -f, --foreground   Run in foreground (don't daemonize)\n");
     printf("  -n, --no-daemonize Same as -f (run in foreground)\n");
     printf("  -d, --debug        Enable debug mode\n");
@@ -52,7 +52,7 @@ printf("  -I, --interface=IF Use specific network interface\n");
 
 void print_version(void)
 {
-    printf("ntpd %s - NTP Server (RFC 5905)\n", VERSION);
+    printf("dntpd %s - Dragon NTP Server (RFC 5905)\n", VERSION);
     printf("Built: %s %s\n", __DATE__, __TIME__);
 }
 

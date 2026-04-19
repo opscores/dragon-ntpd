@@ -4,10 +4,10 @@
 *.so
 *.la
 *.d
-ntpd
-ntpd.o
-ntpd.a
-ntpd.so
+dntpd
+dntpd.o
+dntpd.a
+dntpd.so
 
 # Debug symbols
 *.dSYM/

@@ -1,21 +1,21 @@
-.TH NTPD 8 "April 2026" "ntpd v1.0" "User Commands"
+.TH DNTPD 8 "April 2026" "dntpd v1.0" "User Commands"
 .SH NAME
-ntpd \- Network Time Protocol daemon (NTPv4 server with RFC 5905/8915 compliance)
+dntpd \- Network Time Protocol daemon (NTPv4 server with RFC 5905/8915 compliance)
 .SH SYNOPSIS
-.B ntpd
+.B dntpd
 [\fIOPTIONS\fR]
 .br
-.B ntpd
+.B dntpd
 \-h
 .br
-.B ntpd
+.B dntpd
 \-v
 .br
-.B ntpd
+.B dntpd
 \-c
 \fIconfig\fR
 .SH DESCRIPTION
-.B ntpd
+.B dntpd
 is a Network Time Protocol (NTP) version 4 server implementation in C.
 It synchronizes the system clock with external NTP servers and provides
 time services to NTP clients.
@@ -97,7 +97,7 @@ Bind to IPv6 addresses only (disable IPv4)
 Run as specified user (after daemonizing)
 .TP
 .BI \-p " pid"
-Specify PID file location (default: /var/run/ntpd.pid)
+Specify PID file location (default: /var/run/dntpd.pid)
 .TP
 .BI \-V " verbose"
 Enable verbose logging
@@ -316,13 +316,13 @@ SIGINT
 Interrupt (graceful shutdown)
 .SH ENVIRONMENT VARIABLES
 .TP
-.B NTPD_CONFIG
+.B DNTPD_CONFIG
 Override configuration file location
 .TP
-.B NTPD_LOG
+.B DNTPD_LOG
 Override log file location
 .TP
-.B NTPD_PID
+.B DNTPD_PID
 Override PID file location
 .SH EXAMPLES
 .RS
@@ -330,42 +330,42 @@ Override PID file location
 Run as daemon with default configuration:
 .RS
 .nf
-ntpd
+dntpd
 .fi
 .RE
 .IP \(bu 2
 Run in foreground for debugging:
 .RS
 .nf
-ntpd -f -D 2
+dntpd -f -D 2
 .fi
 .RE
 .IP \(bu 2
 Run with custom configuration:
 .RS
 .nf
-ntpd -c /etc/ntpd.conf
+dntpd -c /etc/dntpd.conf
 .fi
 .RE
 .IP \(bu 2
 Run with specific port:
 .RS
 .nf
-ntpd -p 1234
+dntpd -p 1234
 .fi
 .RE
 .IP \(bu 2
 Run with verbose logging:
 .RS
 .nf
-ntpd -f -V
+dntpd -f -V
 .fi
 .RE
 .IP \(bu 2
 Run with debug level 3:
 .RS
 .nf
-ntpd -f -D 3
+dntpd -f -D 3
 .fi
 .RE
 .RE
@@ -375,15 +375,15 @@ ntpd -f -D 3
 Default configuration file containing NTP server list
 .TP
 .B /var/log/syslog
-System log containing ntpd messages
+System log containing dntpd messages
 .TP
-.B /var/run/ntpd.pid
+.B /var/run/dntpd.pid
 Process ID file (when running as daemon)
 .TP
-.B /etc/ntpd.conf
+.B /etc/dntpd.conf
 Alternative configuration file location
 .TP
-.B /var/run/ntpd.sock
+.B /var/run/dntpd.sock
 Unix socket for local NTP communication
 .SH SEE ALSO
 .BR ntpdate (8),
@@ -414,7 +414,7 @@ RFC 7321 - NTPv4 Packet Format (update)
 RFC 8915 - Network Time Security (NTS)
 .RE
 .SH AUTHOR
-NTPD v1.0 - NTP Server Implementation in C
+DNTPD v1.0 - Dragon NTP Server Implementation in C
 .SH LICENSE
 MIT License
 .SH BUGS

@@ -36,7 +36,7 @@ jobs:
       - name: Check version
         run: |
           echo "=== Version info ==="
-          ./ntpd -v 2>&1 | head -3
+          ./dntpd -v 2>&1 | head -3
 
   # Build and upload release on tag
   build-release:
@@ -65,9 +65,9 @@ jobs:
       - name: Package
         run: |
           ver=${GITHUB_REF#refs/tags/v}
-          mkdir -p release/ntpd-$ver-linux-${{ matrix.compiler }}
-          cp ntpd release/ntpd-$ver-linux-${{ matrix.compiler }}/
-          tar -czf release/ntpd-$ver-linux-${{ matrix.compiler }}.tar.gz release/ntpd-$ver-linux-${{ matrix.compiler }}/
+          mkdir -p release/dntpd-$ver-linux-${{ matrix.compiler }}
+          cp dntpd release/dntpd-$ver-linux-${{ matrix.compiler }}/
+          tar -czf release/dntpd-$ver-linux-${{ matrix.compiler }}.tar.gz release/dntpd-$ver-linux-${{ matrix.compiler }}/
 
       - name: Upload artifact
         uses: actions/upload-release-asset@v1
@@ -75,8 +75,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release/ntpd-$ver-linux-${{ matrix.compiler }}.tar.gz
-          asset_name: ntpd-$ver-linux-${{ matrix.compiler }}.tar.gz
+          asset_path: release/dntpd-$ver-linux-${{ matrix.compiler }}.tar.gz
+          asset_name: dntpd-$ver-linux-${{ matrix.compiler }}.tar.gz
           asset_content_type: application/gzip
 
   create-release:
@@ -106,6 +106,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: NTPD Release v${{ env.VERSION }}
+          release_name: DNTPD Release v${{ env.VERSION }}
           draft: false
           prerelease: false

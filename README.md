@@ -1,8 +1,8 @@
-# NTPD - NTP Server Implementation
+# DNTPD - NTP Server Implementation
 
-[![CI/CD](https://github.com/ntpd-project/ntpd/actions/workflows/ci.yml/badge.svg)](https://github.com/ntpd-project/ntpd/actions)
+[![CI/CD](https://github.com/drakon/dntpd/actions/workflows/ci.yml/badge.svg)](https://github.com/drakon/dntpd/actions)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
-[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-green.svg)](https://github.com/ntpd-project/ntpd)
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-green.svg)](https://github.com/drakon/dntpd)
 [![Standard: RFC 5905](https://img.shields.io/badge/Standard-RFC%205905-brightgreen.svg)](https://www.rfc-editor.org/rfc/rfc5905)
 
 A production-grade NTP server implementation written in C, fully compliant with [RFC 5905](https://www.rfc-editor.org/rfc/rfc5905). Designed for Linux with focus on security, performance, and POSIX compliance.
@@ -26,11 +26,11 @@ A production-grade NTP server implementation written in C, fully compliant with 
 make release
 
 # Run (requires root for port 123)
-sudo ./ntpd -f
+sudo ./dntpd -f
 
 # Or with systemd
-sudo cp ntpd.service /etc/systemd/system/
-sudo systemctl enable --now ntpd
+sudo cp dntpd.service /etc/systemd/system/
+sudo systemctl enable --now dntpd
 ```
 
 ## Command Line Options
@@ -53,22 +53,22 @@ sudo systemctl enable --now ntpd
 
 ```
 ┌────────────────────────────────────────────────┐
-│            NTPD (Port 123)                    │
+│            DNTPD (Port 123)                     │
 ├────────────────────────────────────────────────┤
-│  Peer Thread (RFC 5905 §5.1)                │
-│  ├── Parse NTP packets                    │
-│  ├── Validate (LI, stratum, format)       │
-│  └── Respond to clients                   │
+│  Peer Thread (RFC 5905 §5.1)                   │
+│  ├── Parse NTP packets                         │
+│  ├── Validate (LI, stratum, format)            │
+│  └── Respond to clients                        │
 ├────────────────────────────────────────────────┤
-│  Clock Thread (RFC 5905 §5.2)            │
-│  ├── Sync with external servers            │
-│  ├── Calculate offset/delay             │
-│  └── Adjust system clock                │
+│  Clock Thread (RFC 5905 §5.2)                  │
+│  ├── Sync with external servers                │
+│  ├── Calculate offset/delay                    │
+│  └── Adjust system clock                       │
 ├────────────────────────────────────────────────┤
-│  NTP Algorithms                          │
-│  ├── Marx filter (outlier rejection)       │
-│  ├── Delay/offset calculation           │
-│  └── Clock discipline                  │
+│  NTP Algorithms                                │
+│  ├── Marx filter (outlier rejection)           │
+│  ├── Delay/offset calculation                  │
+│  └── Clock discipline                          │
 └────────────────────────────────────────────────┘
 ```
 
@@ -113,7 +113,7 @@ time.google.com:123
 ## Project Structure
 
 ```
-ntpd/
+dntpd/
 ├── main.c           # Entry point
 ├── config.c        # CLI/config parsing
 ├── socket.c       # Network sockets
@@ -125,7 +125,7 @@ ntpd/
 ├── mode_handler.c # RFC 5905 modes
 ├── ido.c          # I-DO negotiation
 ├── .github/      # CI/CD workflows
-└── ntpd.8        # Man page
+└── dntpd.8        # Man page
 ```
 
 ## CI/CD

@@ -45,9 +45,9 @@ jobs:
       - name: Run executable test
         run: |
           echo "=== Test help ==="
-          ./ntpd -h
+          ./dntpd -h
           echo "=== Test version ==="
-          ./ntpd -v
+          ./dntpd -v
 
   security:
     name: Security analysis

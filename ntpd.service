@@ -1,18 +1,18 @@
 [Unit]
-Description=NTP Server - Network Time Protocol Daemon
-Documentation=https://www.ntp.org/
+Description=Dragon NTP Server (DNTPD) - RFC 5905/8915 Compliant
+Documentation=https://github.com/drakon/dntpd
 After=network.target nss-lookup.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/home/drakon/Development/C/ntpd/ntpd
+ExecStart=/home/drakon/Development/C/ntpd/dntpd
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=ntpd
+SyslogIdentifier=dntpd
 
 # NTP требует привязки к порту 123
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE

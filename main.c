@@ -207,9 +207,9 @@ int main(int argc, char *argv[]) {
     atexit(cleanup_resources);
 
     if (g_cli.foreground || g_cli.debug_level > 0) {
-        openlog("ntpd", LOG_PID | LOG_NDELAY, LOG_USER);
+        openlog("dntpd", LOG_PID | LOG_NDELAY, LOG_USER);
     } else {
-        openlog("ntpd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
+        openlog("dntpd", LOG_PID | LOG_NDELAY, LOG_DAEMON);
     }
 
     if (g_cli.log_file != NULL) {

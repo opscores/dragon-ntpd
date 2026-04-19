@@ -37,8 +37,8 @@
 #endif
 
 #define VERSION "1.0.0"
-#define CONFIG_DIR "/etc/time_sync"
-#define CONFIG_FILE CONFIG_DIR "/servers.conf"
+#define CONFIG_DIR "/etc/dntpd"
+#define CONFIG_FILE CONFIG_DIR "/dntpd.conf"
 #define NTP_PORT 123
 #define NTPQ_PORT 323
 #define BUFFER_SIZE 1024
@@ -51,17 +51,16 @@
 #define MAX_PEERS 8
 #define MARX_K 3
 #define PHI 15
-#define MAXDIST 1000000  /* RFC 5905 Section 11.3: max distance threshold (1 sec in us) */
-#define STEP_THRESHOLD_US 500000  /* RFC 5905 Section 11.3: step threshold (500ms) */
-#define POLL_DELAY_HIGH_THRESHOLD_US 100000   /* High delay threshold (100ms) */
-#define POLL_DELAY_LOW_THRESHOLD_US 10000    /* Low delay threshold (10ms) */
-#define POLL_OFFSET_HIGH_THRESHOLD_US 50000  /* High offset threshold (50ms) */
-#define POLL_OFFSET_LOW_THRESHOLD_US 10000   /* Low offset threshold (10ms) */
-#define POLL_INTERVAL_MIN 4                   /* Minimum poll interval (16 sec) */
-#define POLL_INTERVAL_MAX 12                   /* Maximum poll interval (4096 sec) */
-#define DEFAULT_CONFIG_FILE "/etc/time_sync/servers.conf"
-#define DEFAULT_PID_FILE "/var/run/ntpd.pid"
-#define DEFAULT_LOG_FILE "/var/log/ntpd.log"
+#define MAXDIST 1000000
+#define STEP_THRESHOLD_US 500000
+#define POLL_DELAY_HIGH_THRESHOLD_US 100000
+#define POLL_DELAY_LOW_THRESHOLD_US 10000
+#define POLL_OFFSET_HIGH_THRESHOLD_US 50000
+#define POLL_OFFSET_LOW_THRESHOLD_US 10000
+#define POLL_INTERVAL_MIN 4
+#define POLL_INTERVAL_MAX 12
+#define DEFAULT_PID_FILE "/var/run/dntpd.pid"
+#define DEFAULT_LOG_FILE "/var/log/dntpd.log"
 #define SYNC_RETRY_INTERVAL_SEC 15
 #define DEFAULT_NTPQ_PORT 323
 

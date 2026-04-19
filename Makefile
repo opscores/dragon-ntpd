@@ -1,6 +1,6 @@
 CC ?= cc
 
-TARGET := ntpd
+TARGET := dntpd
 SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c mode_handler.c
 HDR := network.h ntpd.h ntp_packet.h threads.h socket.h time_sync.h filter.h config.h mode_handler.h ido.h
 
@@ -45,7 +45,7 @@ format:
 	clang-format -i $(SRC) $(HDR)
 
 check: release
-	@echo "=== Testing ntpd ===" && \
+	@echo "=== Testing dntpd ===" && \
 	./$(TARGET) -h && \
 	./$(TARGET) -v && \
 	./$(TARGET) -h 2>&1 | head -1

@@ -468,7 +468,7 @@ static void handle_ntpq_request(int client_fd) {
     int resp_len = 0;
 
     if (strncmp(buffer, "version", 7) == 0) {
-        resp_len = snprintf(response, sizeof(response), "ntpd %s\r\n", VERSION);
+        resp_len = snprintf(response, sizeof(response), "dntpd %s\r\n", VERSION);
     } else if (strncmp(buffer, "associations", 12) == 0) {
         pthread_mutex_lock(&g_mutex);
         bool synced = g_time_synced;
