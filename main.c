@@ -1,6 +1,6 @@
 #include "ntpd.h"
 
-ServerConfig *g_servers = NULL;
+ServerConfig* g_servers = NULL;
 int g_server_count = 0;
 NtpSample g_samples[MAX_SAMPLES];
 int g_sample_count = 0;
@@ -50,9 +50,7 @@ void cleanup_resources(void) {
     save_frequency_persistent();
 
     if (g_cli.pid_file != NULL) {
-        if (unlink(g_cli.pid_file) == 0) {
-            syslog(LOG_INFO, "PID файл удалён: %s", g_cli.pid_file);
-        }
+        if (unlink(g_cli.pid_file) == 0) { syslog(LOG_INFO, "PID файл удалён: %s", g_cli.pid_file); }
     }
 
     if (g_server_count > 0 && g_servers != NULL) {
@@ -69,8 +67,8 @@ void cleanup_resources(void) {
 }
 
 int load_server_config(void) {
-    const char *config_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
-    FILE *fp = fopen(config_path, "r");
+    const char* config_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
+    FILE* fp = fopen(config_path, "r");
     if (!fp) {
         syslog(LOG_WARNING, "Конфигурационный файл не найден: %s", config_path);
         return 0;
@@ -81,12 +79,11 @@ int load_server_config(void) {
     char port_str[16] = "123";
 
     while (fgets(line, sizeof(line), fp)) {
-        if (line[0] == '\n' || line[0] == '#' || line[0] == '\r')
-            continue;
+        if (line[0] == '\n' || line[0] == '#' || line[0] == '\r') continue;
 
         /* Broadcast configuration parsing */
         if (strncmp(line, "enable_broadcast", 16) == 0) {
-            char *eq = strchr(line, '=');
+            char* eq = strchr(line, '=');
             if (eq != NULL) {
                 int val = (int)strtol(eq + 1, NULL, 10);
                 if (val == 1) {
@@ -96,12 +93,10 @@ int load_server_config(void) {
             }
             continue;
         } else if (strncmp(line, "broadcast_addr", 14) == 0) {
-            char *eq = strchr(line, '=');
+            char* eq = strchr(line, '=');
             if (eq != NULL && strlen(eq + 1) > 1) {
                 size_t len = strlen(eq + 1);
-                while (len > 0 && (eq[1 + len - 1] == '\n' || eq[1 + len - 1] == '\r')) {
-                    len--;
-                }
+                while (len > 0 && (eq[1 + len - 1] == '\n' || eq[1 + len - 1] == '\r')) { len--; }
                 if (len > 0 && len < INET_ADDRSTRLEN) {
                     free(g_cli.broadcast_addr);
                     g_cli.broadcast_addr = strndup(eq + 1, len);
@@ -110,7 +105,7 @@ int load_server_config(void) {
             }
             continue;
         } else if (strncmp(line, "broadcast_interval", 18) == 0) {
-            char *eq = strchr(line, '=');
+            char* eq = strchr(line, '=');
             if (eq != NULL) {
                 int val = (int)strtol(eq + 1, NULL, 10);
                 if (val >= 32 && val <= 128) {
@@ -121,7 +116,7 @@ int load_server_config(void) {
             continue;
         }
 
-        char *colon = strchr(line, ':');
+        char* colon = strchr(line, ':');
         if (!colon) {
             syslog(LOG_WARNING, "Неверный формат строки конфигурации: %s", line);
             continue;
@@ -149,8 +144,8 @@ int load_server_config(void) {
         memset(port_str, 0, sizeof(port_str));
         memcpy(port_str, colon + 1, port_len);
 
-        char *new_ip = strdup(ip_str);
-        char *new_port = strdup(port_str);
+        char* new_ip = strdup(ip_str);
+        char* new_port = strdup(port_str);
         if (!new_ip || !new_port) {
             syslog(LOG_CRIT, "Ошибка выделения памяти для IP/Port");
             free(new_ip);
@@ -166,8 +161,7 @@ int load_server_config(void) {
             return 0;
         }
 
-        ServerConfig *temp = realloc(g_servers,
-                    (size_t)(g_server_count + 1) * sizeof(ServerConfig));
+        ServerConfig* temp = realloc(g_servers, (size_t)(g_server_count + 1) * sizeof(ServerConfig));
         if (!temp) {
             syslog(LOG_CRIT, "Ошибка выделения памяти для списка серверов");
             free(new_ip);
@@ -198,12 +192,10 @@ int load_server_config(void) {
     return g_server_count;
 }
 
-int apply_user_privileges(const char *username)
-{
-    if (username == NULL)
-        return 0;
+int apply_user_privileges(const char* username) {
+    if (username == NULL) return 0;
 
-    struct passwd *pw = getpwnam(username);
+    struct passwd* pw = getpwnam(username);
     if (pw == NULL) {
         syslog(LOG_ERR, "Пользователь не найден: %s", username);
         return -1;
@@ -219,8 +211,7 @@ int apply_user_privileges(const char *username)
         return -1;
     }
 
-    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)",
-           username, (int)pw->pw_uid, (int)pw->pw_gid);
+    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)", username, (int)pw->pw_uid, (int)pw->pw_gid);
     return 0;
 }
 
@@ -230,22 +221,14 @@ static void signal_handler(int sig) {
     syslog(LOG_INFO, "Получен сигнал завершения");
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     int parse_ret = parse_arguments(argc, argv);
 
-    if (parse_ret == 2) {
-        return EXIT_SUCCESS;
-    }
-    if (parse_ret == 3) {
-        return EXIT_SUCCESS;
-    }
-    if (parse_ret != 0) {
-        return EXIT_FAILURE;
-    }
+    if (parse_ret == 2) { return EXIT_SUCCESS; }
+    if (parse_ret == 3) { return EXIT_SUCCESS; }
+    if (parse_ret != 0) { return EXIT_FAILURE; }
 
-    if (g_cli.debug_level > 0) {
-        fprintf(stderr, "Debug mode enabled (level %d)\n", g_cli.debug_level);
-    }
+    if (g_cli.debug_level > 0) { fprintf(stderr, "Debug mode enabled (level %d)\n", g_cli.debug_level); }
 
     atexit(cleanup_resources);
 
@@ -256,7 +239,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (g_cli.log_file != NULL) {
-        FILE *log_fp = fopen(g_cli.log_file, "a");
+        FILE* log_fp = fopen(g_cli.log_file, "a");
         if (log_fp != NULL) {
             if (!g_cli.foreground && !g_cli.no_daemonize) {
                 int fd = fileno(log_fp);
@@ -272,10 +255,8 @@ int main(int argc, char *argv[]) {
     }
 
     g_local_precision = get_system_precision();
-    syslog(LOG_INFO, "System precision: %d (2^%d = %.3f сек)",
-            g_local_precision, g_local_precision,
-            g_local_precision >= 0 ? (double)(1 << g_local_precision) :
-                                     (double)1.0 / (double)(1LL << (-g_local_precision)));
+    syslog(LOG_INFO, "System precision: %d (2^%d = %.3f сек)", g_local_precision, g_local_precision,
+           g_local_precision >= 0 ? (double)(1 << g_local_precision) : (double)1.0 / (double)(1LL << (-g_local_precision)));
 
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
@@ -290,7 +271,7 @@ int main(int argc, char *argv[]) {
         umask(0);
 
         if (g_cli.pid_file != NULL) {
-            FILE *pid_fp = fopen(g_cli.pid_file, "w");
+            FILE* pid_fp = fopen(g_cli.pid_file, "w");
             if (pid_fp != NULL) {
                 fprintf(pid_fp, "%d\n", (int)getpid());
                 fclose(pid_fp);
@@ -301,9 +282,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (g_cli.run_user != NULL) {
-            if (apply_user_privileges(g_cli.run_user) != 0) {
-                syslog(LOG_ERR, "Не удалось применить привилегии пользователя");
-            }
+            if (apply_user_privileges(g_cli.run_user) != 0) { syslog(LOG_ERR, "Не удалось применить привилегии пользователя"); }
         }
     }
 
@@ -315,9 +294,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Инициализация mode handler (Security-First) */
-    if (mode_handler_init() != 0) {
-        syslog(LOG_WARNING, "Ошибка инициализации mode handler");
-    }
+    if (mode_handler_init() != 0) { syslog(LOG_WARNING, "Ошибка инициализации mode handler"); }
     mode_handler_parse_config(MODES_CONFIG_FILE);
 
     /* Инициализация I-DO state (RFC 5905 Section 8.4) */
@@ -329,8 +306,7 @@ int main(int argc, char *argv[]) {
 
     syslog(LOG_NOTICE, "=====================================================================");
     int sync_interval_1 = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
-    syslog(LOG_NOTICE, "Сервер NTP запущен. Обнаружено %d серверов. Интервал: %d сек.",
-            g_server_count, sync_interval_1);
+    syslog(LOG_NOTICE, "Сервер NTP запущен. Обнаружено %d серверов. Интервал: %d сек.", g_server_count, sync_interval_1);
     syslog(LOG_NOTICE, "=====================================================================");
 
     /* Запуск потока коррекции часов (RFC 5905 Section 5) */
@@ -391,7 +367,7 @@ int main(int argc, char *argv[]) {
             syslog(LOG_NOTICE, "Все попытки синхронизации прошли успешно.");
         } else {
             syslog(LOG_WARNING, "Одна или несколько попыток синхронизации "
-                               "завершились ошибкой.");
+                                "завершились ошибкой.");
         }
 
         int sync_interval_2 = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;

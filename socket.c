@@ -1,8 +1,8 @@
-#include "ntpd.h"
 #include "mode_handler.h"
 #include "network.h"
 #include "network4.h"
 #include "network6.h"
+#include "ntpd.h"
 #include <stdlib.h>
 #include <sys/select.h>
 
@@ -11,22 +11,14 @@ static int g_tcp_sock = -1;
 static pthread_mutex_t g_tcp_sock_mutex = PTHREAD_MUTEX_INITIALIZER;
 static time_t g_last_broadcast = 0;
 
-static int send_broadcast_response(const uint8_t *response, size_t len)
-{
-    if (!g_cli.broadcast_mode) {
-        return 0;
-    }
+static int send_broadcast_response(const uint8_t* response, size_t len) {
+    if (!g_cli.broadcast_mode) { return 0; }
 
     time_t now = time(NULL);
-    if (g_cli.broadcast_interval > 0 &&
-        (now - g_last_broadcast) < g_cli.broadcast_interval) {
-        return 0;
-    }
+    if (g_cli.broadcast_interval > 0 && (now - g_last_broadcast) < g_cli.broadcast_interval) { return 0; }
 
     int sock = network4_create_socket(0);
-    if (sock < 0) {
-        return -1;
-    }
+    if (sock < 0) { return -1; }
 
     if (network4_enable_broadcast(sock) < 0) {
         network4_close_socket(sock);
@@ -34,9 +26,7 @@ static int send_broadcast_response(const uint8_t *response, size_t len)
     }
 
     struct sockaddr_in broadcast_addr;
-    network4_set_broadcast_addr(&broadcast_addr,
-                                g_cli.broadcast_addr,
-                                NTP_PORT);
+    network4_set_broadcast_addr(&broadcast_addr, g_cli.broadcast_addr, NTP_PORT);
 
     ssize_t sent = network4_sendto(sock, response, len, &broadcast_addr);
     network4_close_socket(sock);
@@ -47,69 +37,64 @@ static int send_broadcast_response(const uint8_t *response, size_t len)
     }
 
     g_last_broadcast = now;
-    syslog(LOG_INFO, "Broadcast response sent to %s:%d",
-           g_cli.broadcast_addr ? g_cli.broadcast_addr : NETWORK4_BROADCAST_ADDR,
-           NTP_PORT);
+    syslog(LOG_INFO, "Broadcast response sent to %s:%d", g_cli.broadcast_addr ? g_cli.broadcast_addr : NETWORK4_BROADCAST_ADDR, NTP_PORT);
 
     return 0;
 }
 
-int get_sync_socket(void)
-{
-	if (g_sync_sock >= 0)
-		return g_sync_sock;
+int get_sync_socket(void) {
+    if (g_sync_sock >= 0) return g_sync_sock;
 
-	if (g_cli.family_preference == 2) {
-		g_sync_sock = network6_create_socket(0);
-	} else {
-		g_sync_sock = network4_create_socket(0);
-	}
+    if (g_cli.family_preference == 2) {
+        g_sync_sock = network6_create_socket(0);
+    } else {
+        g_sync_sock = network4_create_socket(0);
+    }
 
-	if (g_sync_sock < 0) {
-		syslog(LOG_ERR, "Не удалось создать сокет синхронизации: %s", strerror(errno));
-		return -1;
-	}
+    if (g_sync_sock < 0) {
+        syslog(LOG_ERR, "Не удалось создать сокет синхронизации: %s", strerror(errno));
+        return -1;
+    }
 
-	network4_enable_reuseaddr(g_sync_sock);
+    network4_enable_reuseaddr(g_sync_sock);
 
-	syslog(LOG_DEBUG, "Sync socket created with ephemeral port (RFC 9109)");
+    syslog(LOG_DEBUG, "Sync socket created with ephemeral port (RFC 9109)");
 
-	return g_sync_sock;
+    return g_sync_sock;
 }
 
-int create_udp_socket(int port)
-{
-	if (port <= 0 || port > 65535) {
-		syslog(LOG_ERR, "Неверный порт для bind: %d", port);
-		return -1;
-	}
+int create_udp_socket(int port) {
+    if (port <= 0 || port > 65535) {
+        syslog(LOG_ERR, "Неверный порт для bind: %d", port);
+        return -1;
+    }
 
-	int sock;
-	if (g_cli.family_preference == 2) {
-		sock = network6_create_socket((uint16_t)port);
-	} else {
-		sock = network4_create_socket((uint16_t)port);
-	}
+    int sock;
+    if (g_cli.family_preference == 2) {
+        sock = network6_create_socket((uint16_t)port);
+    } else {
+        sock = network4_create_socket((uint16_t)port);
+    }
 
-	if (sock < 0) {
-		syslog(LOG_ERR, "Ошибка создания сокета: %s", strerror(errno));
-		return -1;
-	}
+    if (sock < 0) {
+        syslog(LOG_ERR, "Ошибка создания сокета: %s", strerror(errno));
+        return -1;
+    }
 
-	int ret;
-	if (g_cli.family_preference == 2) {
-		ret = network6_bind_socket(sock, g_cli.interface, (uint16_t)port);
-	} else {
-		ret = network4_bind_socket(sock, g_cli.interface, (uint16_t)port);
-	}
+    int ret;
+    if (g_cli.family_preference == 2) {
+        ret = network6_bind_socket(sock, g_cli.interface, (uint16_t)port);
+    } else {
+        ret = network4_bind_socket(sock, g_cli.interface, (uint16_t)port);
+    }
 
-	if (ret < 0) {
-		syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
-		close_socket(sock);
-		return -1;
-	}
+    if (ret < 0) {
+        syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
+        close_socket(sock);
+        return -1;
+    }
 
-	return sock;
+    return sock;
 }
 
 /**
@@ -124,9 +109,7 @@ void close_socket(int sock) {
     int tcp_sock_copy = g_tcp_sock;
     pthread_mutex_unlock(&g_tcp_sock_mutex);
 
-    if (sock >= 0 && sock != g_sync_sock && sock != tcp_sock_copy) {
-        close(sock);
-    }
+    if (sock >= 0 && sock != g_sync_sock && sock != tcp_sock_copy) { close(sock); }
 }
 
 int create_tcp_socket(int port) {
@@ -161,15 +144,14 @@ int create_tcp_socket(int port) {
  *
  * @return void * (NULL) на успех
  */
-static void *handle_peer_request_thread(void *arg) {
-    PeerRequestData *data = (PeerRequestData *)arg;
-    const void *buffer = data->buffer;
+static void* handle_peer_request_thread(void* arg) {
+    PeerRequestData* data = (PeerRequestData*)arg;
+    const void* buffer = data->buffer;
     size_t size = data->size;
-    const char *ip = data->ip;
-    const char *port = data->port;
+    const char* ip = data->ip;
+    const char* port = data->port;
 
-    syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен",
-           ip[0] ? ip : "unknown", port[0] ? port : "unknown");
+    syslog(LOG_INFO, "Поток обработки запроса от %s:%s запущен", ip[0] ? ip : "unknown", port[0] ? port : "unknown");
 
     if (buffer == NULL || size < 48) {
         syslog(LOG_WARNING, "Некорректные параметры запроса");
@@ -239,8 +221,7 @@ static void *handle_peer_request_thread(void *arg) {
     uint8_t response_mode = 0;
     if (mode == NTP_MODE_CLIENT) {
         response_mode = NTP_MODE_SERVER;
-    } else if (mode == NTP_MODE_SYMMETRIC_ACTIVE ||
-               mode == NTP_MODE_SYMMETRIC_PASSIVE) {
+    } else if (mode == NTP_MODE_SYMMETRIC_ACTIVE || mode == NTP_MODE_SYMMETRIC_PASSIVE) {
         response_mode = NTP_MODE_SYMMETRIC_PASSIVE;
     } else if (mode == NTP_MODE_BROADCAST) {
         if (!g_cli.broadcast_mode) {
@@ -318,9 +299,7 @@ static void *handle_peer_request_thread(void *arg) {
         out_root_disp = 0;
     }
 
-    response[0] = (uint8_t)((uint8_t)((out_li & 0x03u) << NTP_LI_SHIFT) |
-                            (uint8_t)((uint8_t)NTP_VN_4 << NTP_VN_SHIFT) |
-                            (uint8_t)response_mode);
+    response[0] = (uint8_t)((uint8_t)((out_li & 0x03u) << NTP_LI_SHIFT) | (uint8_t)((uint8_t)NTP_VN_4 << NTP_VN_SHIFT) | (uint8_t)response_mode);
 
     response[1] = out_stratum;
     response[2] = (uint8_t)pkt.poll;
@@ -347,7 +326,7 @@ static void *handle_peer_request_thread(void *arg) {
     memset(&client_addr, 0, sizeof(client_addr));
 
     errno = 0;
-    char *endp = NULL;
+    char* endp = NULL;
     unsigned long port_ul = strtoul(port, &endp, 10);
 
     if (endp == port || *endp != '\0' || errno == ERANGE || port_ul > 65535UL) {
@@ -367,17 +346,14 @@ static void *handle_peer_request_thread(void *arg) {
     }
 
     if (network4_sendto(sock, response, sizeof(response), &client_addr) < 0) {
-        syslog(LOG_WARNING, "Ошибка отправки ответа клиенту: %s",
-                strerror(errno));
+        syslog(LOG_WARNING, "Ошибка отправки ответа клиенту: %s", strerror(errno));
         network4_close_socket(sock);
         return NULL;
     }
 
     network4_close_socket(sock);
 
-    if (response_mode == NTP_MODE_BROADCAST) {
-        send_broadcast_response(response, sizeof(response));
-    }
+    if (response_mode == NTP_MODE_BROADCAST) { send_broadcast_response(response, sizeof(response)); }
 
     rate_limit_update(ip);
 
@@ -398,9 +374,8 @@ static void *handle_peer_request_thread(void *arg) {
  *
  * @return void
  */
-void handle_client_request(const void *buffer, size_t size,
-                           const char *ip, const char *port) {
-    PeerRequestData *data = malloc(sizeof(PeerRequestData));
+void handle_client_request(const void* buffer, size_t size, const char* ip, const char* port) {
+    PeerRequestData* data = malloc(sizeof(PeerRequestData));
     if (data == NULL) {
         syslog(LOG_ERR, "Ошибка выделения памяти для PeerRequestData");
         return;
@@ -466,9 +441,7 @@ static void handle_ntpq_request(int client_fd) {
     ssize_t n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
 
     if (n <= 0) {
-        if (n < 0) {
-            syslog(LOG_WARNING, "Ошибка чтения от ntpq клиента: %s", strerror(errno));
-        }
+        if (n < 0) { syslog(LOG_WARNING, "Ошибка чтения от ntpq клиента: %s", strerror(errno)); }
         close(client_fd);
         return;
     }
@@ -487,9 +460,9 @@ static void handle_ntpq_request(int client_fd) {
         uint8_t stratum = g_local_stratum;
         pthread_mutex_unlock(&g_mutex);
         resp_len = snprintf(response, sizeof(response),
-            "ind\tassid\tstatus\tconf\treach\tcondition\tlast_event\n"
-            "1\t1\t%s\t0\t377\tsynchronized\t1\n",
-            synced ? (stratum <= 15 ? "6" : "3") : "3");
+                            "ind\tassid\tstatus\tconf\treach\tcondition\tlast_event\n"
+                            "1\t1\t%s\t0\t377\tsynchronized\t1\n",
+                            synced ? (stratum <= 15 ? "6" : "3") : "3");
     } else if (strncmp(buffer, "sysinfo", 7) == 0) {
         pthread_mutex_lock(&g_mutex);
         uint8_t stratum = g_local_stratum;
@@ -500,17 +473,14 @@ static void handle_ntpq_request(int client_fd) {
         uint8_t local_li = g_local_li;
         pthread_mutex_unlock(&g_mutex);
         resp_len = snprintf(response, sizeof(response),
-            "system peer: LOCAL(0)\n"
-            "stratum: %u\n"
-            "poll: %d\n"
-            "precision: %d\n"
-            "root delay: %u ms\n"
-            "root dispersion: %u ms\n"
-            "leap: %02x\n",
-            stratum, (int)poll, (int)precision,
-            ntohl(root_delay) >> 16,
-            ntohl(root_disp) >> 16,
-            local_li);
+                            "system peer: LOCAL(0)\n"
+                            "stratum: %u\n"
+                            "poll: %d\n"
+                            "precision: %d\n"
+                            "root delay: %u ms\n"
+                            "root dispersion: %u ms\n"
+                            "leap: %02x\n",
+                            stratum, (int)poll, (int)precision, ntohl(root_delay) >> 16, ntohl(root_disp) >> 16, local_li);
     } else if (strncmp(buffer, "quit", 4) == 0) {
         resp_len = snprintf(response, sizeof(response), "OK\r\n");
         send(client_fd, response, (size_t)resp_len, 0);
@@ -520,14 +490,12 @@ static void handle_ntpq_request(int client_fd) {
         resp_len = snprintf(response, sizeof(response), "OK\r\n");
     }
 
-    if (resp_len > 0 && send(client_fd, response, (size_t)resp_len, 0) < 0) {
-        syslog(LOG_WARNING, "Ошибка отправки ответа ntpq: %s", strerror(errno));
-    }
+    if (resp_len > 0 && send(client_fd, response, (size_t)resp_len, 0) < 0) { syslog(LOG_WARNING, "Ошибка отправки ответа ntpq: %s", strerror(errno)); }
 
     close(client_fd);
 }
 
-static void *tcp_accept_thread(void *arg) {
+static void* tcp_accept_thread(void* arg) {
     (void)arg;
 
     syslog(LOG_INFO, "TCP accept thread запущен для ntpq");
@@ -536,11 +504,9 @@ static void *tcp_accept_thread(void *arg) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
 
-        int client_fd = accept(g_tcp_sock, (struct sockaddr *)&client_addr, &client_len);
+        int client_fd = accept(g_tcp_sock, (struct sockaddr*)&client_addr, &client_len);
         if (client_fd < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
+            if (errno == EINTR) { continue; }
             syslog(LOG_ERR, "Ошибка accept: %s", strerror(errno));
             break;
         }
@@ -571,4 +537,3 @@ int start_ntpq_thread(void) {
     syslog(LOG_INFO, "ntpq thread запущен");
     return 0;
 }
-

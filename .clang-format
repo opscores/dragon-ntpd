@@ -1,20 +1,17 @@
 # Clang-Format configuration for C code
-# Based on Linux Kernel style with some modifications
+# Based on LLVM style
 
 BasedOnStyle: LLVM
 Language: Cpp
 
 # Indentation
-IndentWidth: 8
-UseTab: Always
-TabWidth: 8
-ContinuationIndentationWidth: 4
+IndentWidth: 4
+UseTab: Never
 
 # Braces
 BreakBeforeBraces: Attach
 BraceWrapping:
   AfterClass: false
-  AfterClassDefinition: false
   AfterControlStatement: false
   AfterEnum: false
   AfterFunction: false
@@ -35,12 +32,15 @@ AlignOperands: true
 AlignTrailingComments: true
 
 # Line length
-ColumnLimit: 80
+ColumnLimit: 160
 
 # Other
 AllowShortFunctionsOnASingleLine: Empty
-AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortLambdasOnASingleLine: true
 IndentCaseLabels: false
 IndentPPDirectives: None
 MaxEmptyLinesToKeep: 1

@@ -17,19 +17,23 @@
 int8_t get_system_precision(void) {
     struct timespec ts;
     if (clock_getres(CLOCK_REALTIME, &ts) == 0) {
-        if (ts.tv_sec == 0 && ts.tv_nsec == 0) {
-            return -20;
-        }
+        if (ts.tv_sec == 0 && ts.tv_nsec == 0) { return -20; }
         if (ts.tv_sec > 0) {
             int8_t p = 0;
             time_t s = ts.tv_sec;
-            while (s > 0) { p++; s >>= 1; }
+            while (s > 0) {
+                p++;
+                s >>= 1;
+            }
             return (p > 6) ? 6 : -p;
         }
         int64_t ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
         if (ns <= 0) return -20;
         int8_t p = 0;
-        while (ns < 1000000000LL) { p--; ns <<= 1; }
+        while (ns < 1000000000LL) {
+            p--;
+            ns <<= 1;
+        }
         return p;
     }
     return -20;
@@ -106,7 +110,7 @@ int apply_time_correction_slew_or_step(int64_t offset_us) {
 }
 
 static int freq_file_write(double ppm) {
-    FILE *fp = fopen(FREQ_FILE, "w");
+    FILE* fp = fopen(FREQ_FILE, "w");
     if (fp == NULL) {
         syslog(LOG_DEBUG, "Cannot open frequency file for write: %s", strerror(errno));
         return -1;
@@ -116,11 +120,9 @@ static int freq_file_write(double ppm) {
     return 0;
 }
 
-static int freq_file_read(double *ppm_out) {
-    FILE *fp = fopen(FREQ_FILE, "r");
-    if (fp == NULL) {
-        return -1;
-    }
+static int freq_file_read(double* ppm_out) {
+    FILE* fp = fopen(FREQ_FILE, "r");
+    if (fp == NULL) { return -1; }
     if (fscanf(fp, "%lf", ppm_out) != 1) {
         fclose(fp);
         return -1;
@@ -144,9 +146,7 @@ int load_frequency_persistent(void) {
 }
 
 int save_frequency_persistent(void) {
-    if (g_freq_state.state != FREQ_STATE_SYNC) {
-        return 0;
-    }
+    if (g_freq_state.state != FREQ_STATE_SYNC) { return 0; }
     freq_file_write(g_freq_state.ppm);
     return 0;
 }
@@ -201,9 +201,7 @@ static int apply_freq_adjtime(double ppm) {
         delta.tv_usec = -100;
     }
     int ret = adjtime(&delta, NULL);
-    if (ret < 0) {
-        syslog(LOG_DEBUG, "adjtime frequency correction failed: %s", strerror(errno));
-    }
+    if (ret < 0) { syslog(LOG_DEBUG, "adjtime frequency correction failed: %s", strerror(errno)); }
     return ret;
 }
 
@@ -231,9 +229,7 @@ static int apply_freq_adjtimex(double ppm) {
 
 int apply_frequency_adjustment(double ppm) {
     double clamped = clamp_frequency(ppm);
-    if (fabs(clamped) < 0.001) {
-        return 0;
-    }
+    if (fabs(clamped) < 0.001) { return 0; }
     if (apply_freq_adjtimex(clamped) == 0) {
         g_freq_state.ppm = clamped;
         return 0;
@@ -242,18 +238,14 @@ int apply_frequency_adjustment(double ppm) {
 }
 
 double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec) {
-    if (delta_sec < FREQ_UPDATE_INTERVAL_MIN_SEC) {
-        return calculate_pll_ppm(offset_us, (time_t)g_freq_state.last_update);
-    }
+    if (delta_sec < FREQ_UPDATE_INTERVAL_MIN_SEC) { return calculate_pll_ppm(offset_us, (time_t)g_freq_state.last_update); }
     return calculate_fll_ppm(offset_us, delta_sec);
 }
 
 int update_frequency_discipline(int64_t offset_us, int poll_exp) {
     time_t now = time(NULL);
     time_t tc = 1LL << poll_exp;
-    if (tc < FREQ_UPDATE_INTERVAL_MIN_SEC) {
-        tc = FREQ_UPDATE_INTERVAL_MIN_SEC;
-    }
+    if (tc < FREQ_UPDATE_INTERVAL_MIN_SEC) { tc = FREQ_UPDATE_INTERVAL_MIN_SEC; }
     double new_ppm = 0.0;
     if (g_freq_state.state == FREQ_STATE_NSET) {
         time_t delta = now - g_freq_state.last_update;
@@ -293,15 +285,11 @@ int update_frequency_discipline(int64_t offset_us, int poll_exp) {
     return apply_frequency_adjustment(g_freq_state.ppm);
 }
 
-int sync_ntp_time(const char *ip, const char *port) {
-    if (ip == NULL || port == NULL) {
-        return -1;
-    }
+int sync_ntp_time(const char* ip, const char* port) {
+    if (ip == NULL || port == NULL) { return -1; }
 
     int sock = get_sync_socket();
-    if (sock < 0) {
-        return -1;
-    }
+    if (sock < 0) { return -1; }
 
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -323,12 +311,11 @@ int sync_ntp_time(const char *ip, const char *port) {
 
     int ret = getaddrinfo(ip, service, &hints, &res);
     if (ret != 0 || res == NULL) {
-        syslog(LOG_ERR, "Не удалось разрешить адрес: %s: %s",
-                ip, gai_strerror(ret));
+        syslog(LOG_ERR, "Не удалось разрешить адрес: %s: %s", ip, gai_strerror(ret));
         return -1;
     }
 
-    struct sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
+    struct sockaddr_in* addr = (struct sockaddr_in*)res->ai_addr;
     serv_addr.sin_family = addr->sin_family;
     serv_addr.sin_port = htons((uint16_t)port_num);
     serv_addr.sin_addr = addr->sin_addr;
@@ -348,10 +335,8 @@ int sync_ntp_time(const char *ip, const char *port) {
     NtpTimestamp t1;
     create_ntp_request(request, &t1);
 
-    if (sendto(sock, request, sizeof(request), 0,
-                (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        syslog(LOG_ERR, "Ошибка отправки запроса на %s:%s: %s",
-                ip, port, strerror(errno));
+    if (sendto(sock, request, sizeof(request), 0, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+        syslog(LOG_ERR, "Ошибка отправки запроса на %s:%s: %s", ip, port, strerror(errno));
         close_socket(sock);
         return -1;
     }
@@ -360,8 +345,7 @@ int sync_ntp_time(const char *ip, const char *port) {
     struct sockaddr_in from_addr;
     socklen_t from_len = sizeof(from_addr);
 
-    ssize_t recv_len = recvfrom(sock, buffer, sizeof(buffer), 0,
-                                 (struct sockaddr *)&from_addr, &from_len);
+    ssize_t recv_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&from_addr, &from_len);
 
     if (recv_len > 0) {
         NtpTimestamp t4 = ntp_timestamp_now();
@@ -423,8 +407,7 @@ int sync_ntp_time(const char *ip, const char *port) {
                     /* RFC 5905 Section 11.3: Do not step if offset exceeds MAXDIST (1 sec) */
                     int64_t abs_offset_us = (offset_us >= 0) ? offset_us : -offset_us;
                     if (abs_offset_us > MAXDIST) {
-                        syslog(LOG_WARNING, "Пропуск коррекции: смещение слишком большое (%" PRId64 " мкс > %d мкс)",
-                               offset_us, MAXDIST);
+                        syslog(LOG_WARNING, "Пропуск коррекции: смещение слишком большое (%" PRId64 " мкс > %d мкс)", offset_us, MAXDIST);
                         pthread_mutex_lock(&g_mutex);
                         g_local_stratum = 16;
                         g_time_synced = false;
@@ -452,9 +435,7 @@ int sync_ntp_time(const char *ip, const char *port) {
 
                     /* Get filtered offset from samples */
                     int64_t filtered_offset = offset_us;
-                    if (g_sample_count > 0) {
-                        filtered_offset = g_samples[g_sample_count - 1].offset;
-                    }
+                    if (g_sample_count > 0) { filtered_offset = g_samples[g_sample_count - 1].offset; }
 
                     /* Update poll interval under mutex */
                     g_local_poll = adjust_poll_interval(g_local_poll, pkt.poll, delay_us, offset_us);

@@ -38,8 +38,7 @@ void marx_remove_sample(int index) {
     if (index >= 0 && index < g_sample_count) {
         pthread_mutex_lock(&g_mutex);
         const size_t move_count = (size_t)(g_sample_count - index - 1);
-        memmove(&g_samples[index], &g_samples[index + 1],
-                move_count * sizeof(NtpSample));
+        memmove(&g_samples[index], &g_samples[index + 1], move_count * sizeof(NtpSample));
         g_sample_count--;
         pthread_mutex_unlock(&g_mutex);
     }
@@ -55,7 +54,7 @@ void marx_remove_sample(int index) {
  *
  * Return: Median value
  */
-uint64_t marx_median(uint64_t *arr, int count) {
+uint64_t marx_median(uint64_t* arr, int count) {
     if (arr == NULL || count <= 0) return 0;
 
     for (int i = 0; i < count - 1; i++) {
@@ -82,24 +81,19 @@ uint64_t marx_median(uint64_t *arr, int count) {
  *
  * Return: Number of valid samples after filtering
  */
-int marx_filter_outliers(NtpSample *samples, int count, int k) {
+int marx_filter_outliers(NtpSample* samples, int count, int k) {
     if (samples == NULL || count < 3) return count;
     if (count > MAX_SAMPLES) count = MAX_SAMPLES;
 
     const int original_count = count;
 
     uint64_t delays[MAX_SAMPLES];
-    for (int i = 0; i < count; i++) {
-        delays[i] = samples[i].delay;
-    }
+    for (int i = 0; i < count; i++) { delays[i] = samples[i].delay; }
 
     uint64_t median = marx_median(delays, count);
 
     uint64_t abs_devs[MAX_SAMPLES];
-    for (int i = 0; i < count; i++) {
-        abs_devs[i] = (samples[i].delay > median) ?
-                      (samples[i].delay - median) : (median - samples[i].delay);
-    }
+    for (int i = 0; i < count; i++) { abs_devs[i] = (samples[i].delay > median) ? (samples[i].delay - median) : (median - samples[i].delay); }
     uint64_t mad = marx_median(abs_devs, count);
 
     uint64_t kmad;
@@ -114,9 +108,7 @@ int marx_filter_outliers(NtpSample *samples, int count, int k) {
                 kmad = UINT64_MAX;
             } else {
                 kmad = k64 * mad;
-                if (kmad > UINT64_MAX - median) {
-                    kmad = UINT64_MAX;
-                }
+                if (kmad > UINT64_MAX - median) { kmad = UINT64_MAX; }
             }
         }
     }
@@ -135,9 +127,7 @@ int marx_filter_outliers(NtpSample *samples, int count, int k) {
     int filtered = 0;
     for (int i = 0; i < count; i++) {
         if (samples[i].delay <= threshold) {
-            if (filtered != i) {
-                samples[filtered] = samples[i];
-            }
+            if (filtered != i) { samples[filtered] = samples[i]; }
             filtered++;
         }
     }
@@ -162,9 +152,7 @@ uint64_t ntp_offset_jitter_us_locked(void) {
     }
 
     long double mean = 0.0L;
-    for (int i = 0; i < g_sample_count; i++) {
-        mean += (long double)g_samples[i].offset;
-    }
+    for (int i = 0; i < g_sample_count; i++) { mean += (long double)g_samples[i].offset; }
     mean /= (long double)g_sample_count;
 
     long double var = 0.0L;
@@ -173,9 +161,7 @@ uint64_t ntp_offset_jitter_us_locked(void) {
         var += d * d;
     }
 
-    if (g_sample_count > 1) {
-        var /= (long double)(g_sample_count - 1);
-    }
+    if (g_sample_count > 1) { var /= (long double)(g_sample_count - 1); }
 
     if (var < 0.0L) var = 0.0L;
     long double sd = sqrtl(var);

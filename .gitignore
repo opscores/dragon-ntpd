@@ -68,3 +68,7 @@ build/
 # AI assistant directories
 .qwen/
 .gemini/
+
+# Pre-commit
+.pre-commit-cache
+.pre-commit.log

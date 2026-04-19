@@ -1,0 +1,21 @@
+# EOL (end of line)
+* text=auto eol=lf
+
+# Ignore whitespace changes in git blame
+*.c whitespace=nowarn,indent-only-non-tabbed
+*.h whitespace=nowarn,indent-only-non-tabbed
+
+# Use tabs for indentation
+*.c tabindent
+*.h tabindent
+
+# Binary files
+*.o binary
+*.exe binary
+*.dll binary
+*.so binary
+
+# Ignore generated files
+*.pyc binary
+*.pyo binary
+*.egg-info/ directory

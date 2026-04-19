@@ -84,6 +84,12 @@ make debug
 # With sanitizers
 make asan    # Address sanitizer
 make ubsan   # Undefined behavior sanitizer
+
+# Format code (LLVM style)
+make format
+
+# Run static analysis
+make lint
 ```
 
 ## Configuration
@@ -105,7 +111,7 @@ time.google.com:123
 ## Security
 
 - **CERT C** compliant code
-- **Linux Kernel Style** formatting
+- **LLVM Style** formatting
 - Signed commits (GPG)
 - Static analysis (clang-tidy)
 - Sanitizers in CI/CD
@@ -133,9 +139,39 @@ dntpd/
 GitHub Actions running:
 - Build (gcc + clang)
 - Static analysis (CodeQL, clang-tidy)
-- Code formatting check
+- Code formatting check (LLVM style)
 - Cross-compilation (ARM, i686)
 - Security analysis
+
+## Code Style
+
+We use **LLVM style** for code formatting:
+
+- **clang-format** with LLVM style
+- **4-space indentation**
+- **160 character line limit**
+- **Short functions on single line**
+
+### Format Code
+
+```bash
+# Format all files
+make format
+
+# Or manually
+clang-format -i *.c *.h
+```
+
+### Pre-commit Hooks
+
+Install pre-commit hooks:
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
+This will automatically format code before each commit.
 
 ## License
 

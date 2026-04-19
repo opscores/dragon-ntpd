@@ -1,10 +1,10 @@
 /**
  * threads.c - Многопоточная обработка NTP-пэеров и системных часов
- * 
+ *
  * Реализация согласно RFC 5905 Section 5:
  * - Каждый NTP-пэр обрабатывается в отдельном потоке
  * - Системные часы (дисплей, календарь) обрабатываются в отдельном потоке
- * 
+ *
  * POSIX best practices (POSIX threads):
  * - Использование pthread_mutex для синхронизации доступа к общим данным
  * - pthread_cond для уведомления потоков об изменениях
@@ -17,14 +17,14 @@
  */
 
 #include "ntpd.h"
-#include <stdatomic.h>  /* C11 atomic operations */
+#include <stdatomic.h> /* C11 atomic operations */
 
 /* ============================================================================
  * Константы для типов коррекции часов (RFC 5905 Section 5.1)
  * ============================================================================ */
 
-#define STEP 1    /* Мгновенная коррекция (clock_settime) */
-#define SLEW 2    /* Плавная коррекция (adjtime) */
+#define STEP 1 /* Мгновенная коррекция (clock_settime) */
+#define SLEW 2 /* Плавная коррекция (adjtime) */
 
 /* ============================================================================
  * Контекстные структуры для потоков
@@ -38,17 +38,17 @@
  * POSIX best practices: Использование atomic для флагов и дескрипторов
  */
 typedef struct {
-    int sock_fd;                    /* Файловый дескриптор сокетa */
-    char ip[INET_ADDRSTRLEN];       /* IP-адрес пэера */
-    char port[16];                  /* Порт пэера */
-    pthread_mutex_t sock_mutex;     /* Мьютекс для сокет-операций */
-    pthread_cond_t sock_cond;       /* Условие для блокировки сокет-операций */
+    int sock_fd;                                 /* Файловый дескриптор сокетa */
+    char ip[INET_ADDRSTRLEN];                    /* IP-адрес пэера */
+    char port[16];                               /* Порт пэера */
+    pthread_mutex_t sock_mutex;                  /* Мьютекс для сокет-операций */
+    pthread_cond_t sock_cond;                    /* Условие для блокировки сокет-операций */
     struct sockaddr_storage client_addr_storage; /* Буфер для адреса клиента */
-    socklen_t client_addr_len;      /* Длина адреса клиента */
-    PeerState *peer_state;          /* Состояние пэера */
-    pthread_t thread_id;            /* Дескриптор потока */
-    atomic_bool sock_valid;         /* Флаг валидности сокетa (atomic для signal safety) */
-    int sock_type;                  /* Тип сокетa (для правильного закрытия) */
+    socklen_t client_addr_len;                   /* Длина адреса клиента */
+    PeerState* peer_state;                       /* Состояние пэера */
+    pthread_t thread_id;                         /* Дескриптор потока */
+    atomic_bool sock_valid;                      /* Флаг валидности сокетa (atomic для signal safety) */
+    int sock_type;                               /* Тип сокетa (для правильного закрытия) */
 } PeerThreadContext;
 
 /**
@@ -56,13 +56,13 @@ typedef struct {
  * Содержит данные для обновления системных часов
  */
 typedef struct {
-    int interval_ms;                /* Интервал обновления в мс */
-    pthread_mutex_t clock_mutex;    /* Мьютекс для доступа к часам */
-    pthread_cond_t clock_cond;      /* Условие для пробуждения потока */
-    bool running;                   /* Флаг работы потока */
-    pthread_t thread_id;            /* Дескриптор потока */
-    int64_t last_offset_us;         /* Последнее значение коррекции */
-    int last_correction;            /* Последняя коррекция (SLEW/STEP) */
+    int interval_ms;             /* Интервал обновления в мс */
+    pthread_mutex_t clock_mutex; /* Мьютекс для доступа к часам */
+    pthread_cond_t clock_cond;   /* Условие для пробуждения потока */
+    bool running;                /* Флаг работы потока */
+    pthread_t thread_id;         /* Дескриптор потока */
+    int64_t last_offset_us;      /* Последнее значение коррекции */
+    int last_correction;         /* Последняя коррекция (SLEW/STEP) */
 } ClockThreadContext;
 
 /* ============================================================================
@@ -87,22 +87,20 @@ static atomic_bool g_clock_thread_running = 0;
 
 /**
  * Обработка входящего запроса от NTP-пэера
- * 
+ *
  * @param buffer Буфер с данными запроса
  * @param size Размер буфера
  * @param ip IP-адрес клиента
  * @param port Порт клиента
- * 
+ *
  * @return 0 на успех, < 0 на ошибку
  */
-static int handle_peer_request(const void *buffer, size_t size,
-                               const char *ip, const char *port) {
+static int handle_peer_request(const void* buffer, size_t size, const char* ip, const char* port) {
     int ret = 0;
 
     /* Проверка размера пакета */
     if (size < sizeof(NtpPacket)) {
-        syslog(LOG_WARNING, "Пакет от %s:%s слишком мал (%zu байт)",
-               ip, port, size);
+        syslog(LOG_WARNING, "Пакет от %s:%s слишком мал (%zu байт)", ip, port, size);
         return -1;
     }
 
@@ -117,8 +115,7 @@ static int handle_peer_request(const void *buffer, size_t size,
 
     /* Проверка режима (должен быть клиентом - MODE 3) */
     if ((pkt.li_vn_mode & NTP_MODE_MASK) != NTP_MODE_CLIENT) {
-        syslog(LOG_DEBUG, "Не клиентский режим от %s:%s (MODE=%u)",
-               ip, port, pkt.li_vn_mode & NTP_MODE_MASK);
+        syslog(LOG_DEBUG, "Не клиентский режим от %s:%s (MODE=%u)", ip, port, pkt.li_vn_mode & NTP_MODE_MASK);
         return -1;
     }
 
@@ -143,17 +140,14 @@ static int handle_peer_request(const void *buffer, size_t size,
         response.xmit_ts = pkt.xmit_ts;
         response.orig_ts = ntp_timestamp_now();
 
-        ssize_t send_len = sendto(g_peer_ctx.sock_fd, &response, sizeof(response),
-                                   0, (struct sockaddr *)&g_peer_ctx.client_addr_storage,
-                                   g_peer_ctx.client_addr_len);
+        ssize_t send_len =
+            sendto(g_peer_ctx.sock_fd, &response, sizeof(response), 0, (struct sockaddr*)&g_peer_ctx.client_addr_storage, g_peer_ctx.client_addr_len);
 
         if (send_len < 0) {
-            syslog(LOG_WARNING, "Ошибка отправки ответа %s:%s: %s",
-                   ip, port, strerror(errno));
+            syslog(LOG_WARNING, "Ошибка отправки ответа %s:%s: %s", ip, port, strerror(errno));
             ret = -1;
         } else {
-            syslog(LOG_DEBUG, "Ответ отправлен %s:%s (%zd байт)",
-                   ip, port, send_len);
+            syslog(LOG_DEBUG, "Ответ отправлен %s:%s (%zd байт)", ip, port, send_len);
         }
     }
 
@@ -179,11 +173,10 @@ static int handle_peer_request(const void *buffer, size_t size,
  *
  * Return: void * (NULL) on exit
  */
-static void *peer_thread_main(void *arg) {
-    PeerThreadContext *ctx = (PeerThreadContext *)arg;
+static void* peer_thread_main(void* arg) {
+    PeerThreadContext* ctx = (PeerThreadContext*)arg;
 
-    syslog(LOG_INFO, "Поток обработки пэера запущен для %s:%s",
-           ctx->ip, ctx->port);
+    syslog(LOG_INFO, "Поток обработки пэера запущен для %s:%s", ctx->ip, ctx->port);
 
     /* Установка флагов (C11 memory barrier implicit in atomic_store) */
     atomic_store_explicit(&g_peer_thread_running, 1, memory_order_release);
@@ -201,30 +194,25 @@ static void *peer_thread_main(void *arg) {
         char buffer[BUFFER_SIZE];
         memset(buffer, 0, sizeof(buffer));
 
-        ssize_t recv_len = recvfrom(ctx->sock_fd, buffer, sizeof(buffer),
-                                    MSG_DONTWAIT,
-                                    (struct sockaddr *)&g_peer_ctx.client_addr_storage,
-                                    &g_peer_ctx.client_addr_len);
+        ssize_t recv_len =
+            recvfrom(ctx->sock_fd, buffer, sizeof(buffer), MSG_DONTWAIT, (struct sockaddr*)&g_peer_ctx.client_addr_storage, &g_peer_ctx.client_addr_len);
 
         if (recv_len < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 /* Нет данных - продолжаем цикл */
                 continue;
             }
-            syslog(LOG_WARNING, "Ошибка приёма от пэера %s:%s: %s",
-                   ctx->ip, ctx->port, strerror(errno));
+            syslog(LOG_WARNING, "Ошибка приёма от пэера %s:%s: %s", ctx->ip, ctx->port, strerror(errno));
             break;
         }
 
         /* Обработка запроса */
         char client_ip[INET_ADDRSTRLEN];
-        if (inet_ntop(AF_INET, &((struct sockaddr_in *)&g_peer_ctx.client_addr_storage)->sin_addr,
-                      client_ip, sizeof(client_ip)) == NULL) {
+        if (inet_ntop(AF_INET, &((struct sockaddr_in*)&g_peer_ctx.client_addr_storage)->sin_addr, client_ip, sizeof(client_ip)) == NULL) {
             snprintf(client_ip, sizeof(client_ip), "%s", "unknown");
         }
         char port_str[6];
-        snprintf(port_str, sizeof(port_str), "%hu", (unsigned short)ntohs(
-            ((struct sockaddr_in *)&g_peer_ctx.client_addr_storage)->sin_port));
+        snprintf(port_str, sizeof(port_str), "%hu", (unsigned short)ntohs(((struct sockaddr_in*)&g_peer_ctx.client_addr_storage)->sin_port));
 
         handle_peer_request(buffer, (size_t)recv_len, client_ip, port_str);
     }
@@ -233,24 +221,22 @@ static void *peer_thread_main(void *arg) {
     g_peer_ctx.sock_valid = 0;
     atomic_store_explicit(&g_peer_thread_running, 0, memory_order_release);
 
-    syslog(LOG_INFO, "Поток обработки пэера %s:%s завершён",
-           ctx->ip, ctx->port);
+    syslog(LOG_INFO, "Поток обработки пэера %s:%s завершён", ctx->ip, ctx->port);
 
     return NULL;
 }
 
 /**
  * Создание контекста потока пэера
- * 
+ *
  * @param sock_fd Файловый дескриптор сокетa
  * @param ip IP-адрес пэера
  * @param port Порт пэера
  * @param peer_state Состояние пэера
- * 
+ *
  * @return 0 на успех, < 0 на ошибку
  */
-static int peer_thread_init(int sock_fd, const char *ip, const char *port,
-                            PeerState *peer_state) {
+static int peer_thread_init(int sock_fd, const char* ip, const char* port, PeerState* peer_state) {
     int ret = 0;
 
     /* Инициализация контекста */
@@ -290,16 +276,15 @@ cleanup_attr:
 
 /**
  * Запуск потока обработки пэера
- * 
+ *
  * @param sock_fd Файловый дескриптор сокетa
  * @param ip IP-адрес пэера
  * @param port Порт пэера
  * @param peer_state Состояние пэера
- * 
+ *
  * @return 0 на успех, < 0 на ошибку
  */
-int start_peer_thread(int sock_fd, const char *ip, const char *port,
-                      PeerState *peer_state) {
+int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* peer_state) {
     int ret = 0;
     pthread_t thread;
 
@@ -336,7 +321,7 @@ int start_peer_thread(int sock_fd, const char *ip, const char *port,
 
     /* Установка флагов (C11 memory barrier для согласованности видимости данных) */
     atomic_store_explicit(&g_peer_thread_running, 1, memory_order_release);
-    atomic_thread_fence(memory_order_release);  /* Барьер памяти */
+    atomic_thread_fence(memory_order_release); /* Барьер памяти */
     g_peer_ctx.sock_valid = 1;
 
     /* Защита sock_fd и peer_state мьютексом (не атомарные типы) */
@@ -359,9 +344,7 @@ cleanup:
 void stop_peer_thread(void) {
     int join_ret = 0;
 
-    if (!atomic_load_explicit(&g_peer_thread_running, memory_order_acquire)) {
-        return;
-    }
+    if (!atomic_load_explicit(&g_peer_thread_running, memory_order_acquire)) { return; }
 
     /* Сброс флагов */
     atomic_store_explicit(&g_peer_thread_running, 0, memory_order_release);
@@ -373,9 +356,7 @@ void stop_peer_thread(void) {
 
     /* ✅ ПРАКТИКА 4: Обработка ошибок pthread_join */
     join_ret = pthread_join(g_peer_ctx.thread_id, NULL);
-    if (join_ret != 0) {
-        syslog(LOG_WARNING, "Ошибка pthread_join потока пэера: %s", strerror(join_ret));
-    }
+    if (join_ret != 0) { syslog(LOG_WARNING, "Ошибка pthread_join потока пэера: %s", strerror(join_ret)); }
 
     /* Барьер памяти для согласованности видимости данных (C11 memory model) */
     atomic_thread_fence(memory_order_acquire);
@@ -401,20 +382,14 @@ void cleanup_peer_thread(void) {
     /* Защита sock_fd мьютексом перед закрытием */
     pthread_mutex_lock(&g_peer_ctx.sock_mutex);
     if (g_peer_ctx.sock_fd >= 0) {
-        if (close(g_peer_ctx.sock_fd) != 0) {
-            syslog(LOG_WARNING, "Ошибка close сокетa пэера: %s", strerror(errno));
-        }
+        if (close(g_peer_ctx.sock_fd) != 0) { syslog(LOG_WARNING, "Ошибка close сокетa пэера: %s", strerror(errno)); }
         g_peer_ctx.sock_fd = -1;
     }
     pthread_mutex_unlock(&g_peer_ctx.sock_mutex);
 
     /* Обработка ошибок pthread_mutex_destroy и pthread_cond_destroy */
-    if (pthread_mutex_destroy(&g_peer_ctx.sock_mutex) != 0) {
-        syslog(LOG_WARNING, "Ошибка pthread_mutex_destroy пэера: %s", strerror(errno));
-    }
-    if (pthread_cond_destroy(&g_peer_ctx.sock_cond) != 0) {
-        syslog(LOG_WARNING, "Ошибка pthread_cond_destroy пэера: %s", strerror(errno));
-    }
+    if (pthread_mutex_destroy(&g_peer_ctx.sock_mutex) != 0) { syslog(LOG_WARNING, "Ошибка pthread_mutex_destroy пэера: %s", strerror(errno)); }
+    if (pthread_cond_destroy(&g_peer_ctx.sock_cond) != 0) { syslog(LOG_WARNING, "Ошибка pthread_cond_destroy пэера: %s", strerror(errno)); }
 }
 
 /* ============================================================================
@@ -423,7 +398,7 @@ void cleanup_peer_thread(void) {
 
 /**
  * Обновление системных часов
- * 
+ *
  * @param offset_us Коррекция в микросекундах
  * @param correction Тип коррекции (SLEW или STEP)
  */
@@ -450,11 +425,10 @@ static void update_system_clock(int64_t offset_us, int correction) {
  *
  * @return void * (NULL) на успех
  */
-static void *clock_thread_main(void *arg) {
-    ClockThreadContext *ctx = (ClockThreadContext *)arg;
+static void* clock_thread_main(void* arg) {
+    ClockThreadContext* ctx = (ClockThreadContext*)arg;
 
-    syslog(LOG_INFO, "Поток обработки часов запущен (интервал %d мс)",
-           ctx->interval_ms);
+    syslog(LOG_INFO, "Поток обработки часов запущен (интервал %d мс)", ctx->interval_ms);
 
     /* Установка флагов (C11 memory barrier implicit in atomic_store) */
     atomic_store_explicit(&g_clock_thread_running, 1, memory_order_release);
@@ -474,8 +448,7 @@ static void *clock_thread_main(void *arg) {
 
         /* Защита g_last_sync_ts мьютексом (RFC 5905 Section 5.2) */
         pthread_mutex_lock(&g_mutex);
-        int64_t expected_ns = (int64_t)g_last_sync_ts.sec * 1000000000LL +
-                              g_last_sync_ts.frac * 1000;
+        int64_t expected_ns = (int64_t)g_last_sync_ts.sec * 1000000000LL + g_last_sync_ts.frac * 1000;
         pthread_mutex_unlock(&g_mutex);
 
         int64_t offset_ns = now_ns - expected_ns;
@@ -499,8 +472,7 @@ static void *clock_thread_main(void *arg) {
         }
 
         pthread_mutex_lock(&g_clock_ctx.clock_mutex);
-        int rc = pthread_cond_timedwait(&g_clock_ctx.clock_cond,
-                                        &g_clock_ctx.clock_mutex, &deadline);
+        int rc = pthread_cond_timedwait(&g_clock_ctx.clock_cond, &g_clock_ctx.clock_mutex, &deadline);
         pthread_mutex_unlock(&g_clock_ctx.clock_mutex);
 
         if (rc == ETIMEDOUT) {
@@ -508,9 +480,7 @@ static void *clock_thread_main(void *arg) {
             continue;
         } else if (rc == EINTR) {
             /* Прерывание - проверяем флаг */
-            if (!atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) {
-                break;
-            }
+            if (!atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) { break; }
             continue;
         } else {
             /* Уведомление - пробуждаем поток */
@@ -525,9 +495,9 @@ static void *clock_thread_main(void *arg) {
 
 /**
  * Создание контекста потока часов
- * 
+ *
  * @param interval_ms Интервал обновления в мс
- * 
+ *
  * @return 0 на успех, < 0 на ошибку
  */
 static int clock_thread_init(int interval_ms) {
@@ -566,9 +536,9 @@ cleanup_attr:
 
 /**
  * Запуск потока обработки часов
- * 
+ *
  * @param interval_ms Интервал обновления в мс
- * 
+ *
  * @return 0 на успех, < 0 на ошибку
  */
 int start_clock_thread(int interval_ms) {
@@ -613,9 +583,7 @@ cleanup:
 void stop_clock_thread(void) {
     int join_ret = 0;
 
-    if (!atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) {
-        return;
-    }
+    if (!atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) { return; }
 
     /* Сброс флагов */
     atomic_store_explicit(&g_clock_thread_running, 0, memory_order_release);
@@ -627,9 +595,7 @@ void stop_clock_thread(void) {
 
     /* ✅ ПРАКТИКА 4: Обработка ошибок pthread_join */
     join_ret = pthread_join(g_clock_ctx.thread_id, NULL);
-    if (join_ret != 0) {
-        syslog(LOG_WARNING, "Ошибка pthread_join потока часов: %s", strerror(join_ret));
-    }
+    if (join_ret != 0) { syslog(LOG_WARNING, "Ошибка pthread_join потока часов: %s", strerror(join_ret)); }
 
     /* Барьер памяти для согласованности видимости данных (C11 memory model) */
     atomic_thread_fence(memory_order_acquire);
@@ -639,7 +605,7 @@ void stop_clock_thread(void) {
 
 /**
  * Уведомление потока часов об изменении
- * 
+ *
  * @return 0 на успех, < 0 на ошибку
  */
 int clock_thread_notify(void) {
@@ -654,7 +620,7 @@ int clock_thread_notify(void) {
 
 /**
  * Получение последнего значения коррекции
- * 
+ *
  * @return Последнее значение коррекции в мкс
  */
 int64_t clock_thread_get_last_offset(void) {
@@ -667,7 +633,7 @@ int64_t clock_thread_get_last_offset(void) {
 
 /**
  * Получение последней коррекции
- * 
+ *
  * @return Последняя коррекция (SLEW или STEP)
  */
 int clock_thread_get_last_correction(void) {
@@ -685,10 +651,6 @@ void cleanup_clock_thread(void) {
     syslog(LOG_INFO, "Очистка ресурсов потока часов");
 
     /* Обработка ошибок pthread_mutex_destroy и pthread_cond_destroy */
-    if (pthread_mutex_destroy(&g_clock_ctx.clock_mutex) != 0) {
-        syslog(LOG_WARNING, "Ошибка pthread_mutex_destroy часов: %s", strerror(errno));
-    }
-    if (pthread_cond_destroy(&g_clock_ctx.clock_cond) != 0) {
-        syslog(LOG_WARNING, "Ошибка pthread_cond_destroy часов: %s", strerror(errno));
-    }
+    if (pthread_mutex_destroy(&g_clock_ctx.clock_mutex) != 0) { syslog(LOG_WARNING, "Ошибка pthread_mutex_destroy часов: %s", strerror(errno)); }
+    if (pthread_cond_destroy(&g_clock_ctx.clock_cond) != 0) { syslog(LOG_WARNING, "Ошибка pthread_cond_destroy часов: %s", strerror(errno)); }
 }

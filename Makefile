@@ -7,7 +7,9 @@ TARGET := dntpd
 BUILD_TYPE ?= release
 
 SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c mode_handler.c network.c network4.c network6.c
-HDR := network.h ntpd.h ntp_packet.h threads.h socket.h time_sync.h filter.h config.h mode_handler.h ido.h
+HDR := network.h ntpd.h threads.h mode_handler.h network4.h network6.h ido.h
+ALL_SRC := $(SRC) *.c
+ALL_HDR := $(HDR) *.h
 
 # Base flags
 CSTD := -std=c11
@@ -43,7 +45,7 @@ endif
 # Targets
 # ============================================
 
-.PHONY: all debug release asan ubsan clean tidy format check
+.PHONY: all debug release asan ubsan clean tidy format check lint lint-fix
 
 all: release
 
@@ -54,11 +56,11 @@ release:
 	$(MAKE) BUILD_TYPE=release $(TARGET)
 
 asan: CFLAGS := $(BASE_CFLAGS) -O1 -g3 -fsanitize=address -fno-omit-frame-pointer
-asan: LDFLAGS := $(BASE_LDFLAGS) -fsanitize=address
+asan: LDFLAGS := $(BASE_CFLAGS) -O1 -g3 -fsanitize=address
 asan: $(TARGET)
 
 ubsan: CFLAGS := $(BASE_CFLAGS) -O1 -g3 -fsanitize=undefined -fno-omit-frame-pointer
-ubsan: LDFLAGS := $(BASE_LDFLAGS) -fsanitize=undefined
+ubsan: LDFLAGS := $(BASE_CFLAGS) -O1 -g3 -fsanitize=undefined
 ubsan: $(TARGET)
 
 $(TARGET): $(SRC)
@@ -70,8 +72,18 @@ tidy:
 		clang-tidy -p . "$$f" -- $(CC) $(CFLAGS) -c "$$f" 2>/dev/null || true; \
 	done
 
-format:
-	clang-format -i $(SRC) $(HDR)
+lint:
+	@echo "=== Running clang-analyzer ===" && \
+	clang-analyzer -analyze $(SRC) -- $(CC) $(CFLAGS) -c $(SRC) 2>&1 | grep -v "warning:" || true
+	@echo "=== Running cppcheck ===" && \
+	cppcheck --enable=all --suppress=*:*:*.h --inline-suppr $(SRC) 2>&1 || true
+
+lint-fix:
+	@echo "=== Formatting code ===" && \
+	clang-format -i $(SRC) $(HDR) && \
+	echo "=== Formatting complete ==="
+
+format: lint-fix
 
 check: release
 	@echo "=== Testing dntpd ===" && \
