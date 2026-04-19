@@ -13,11 +13,13 @@ ContinuationIndentationWidth: 4
 # Braces
 BreakBeforeBraces: Attach
 BraceWrapping:
+  AfterClass: false
   AfterClassDefinition: false
   AfterControlStatement: false
   AfterEnum: false
   AfterFunction: false
   AfterNamespace: false
+  AfterObjCDeclaration: false
   AfterStruct: false
   AfterUnion: false
   BeforeCatch: false
