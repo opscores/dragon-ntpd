@@ -98,10 +98,10 @@ int parse_arguments(int argc, char* argv[]) {
         } else if (strncmp(arg, "--config=", 9) == 0) {
             g_cli.config_file = arg + 9;
         } else if (strcmp(arg, "-f") == 0 || strcmp(arg, "--foreground") == 0) {
-            if (g_cli.no_daemonize) { fprintf(stderr, "Note: -n has no effect (same as -f)\n"); }
+            if (g_cli.no_daemonize) fprintf(stderr, "Note: -n has no effect (same as -f)\n");
             g_cli.foreground = 1;
         } else if (strcmp(arg, "-n") == 0 || strcmp(arg, "--no-daemonize") == 0) {
-            if (g_cli.foreground) { fprintf(stderr, "Note: -f has no effect (same as -n)\n"); }
+            if (g_cli.foreground) fprintf(stderr, "Note: -f has no effect (same as -n)\n");
             g_cli.no_daemonize = 1;
         } else if (strcmp(arg, "-D") == 0) {
             if (i + 1 < argc && argv[i + 1][0] != '-') {
@@ -124,7 +124,7 @@ int parse_arguments(int argc, char* argv[]) {
                 return -1;
             }
         } else if (strcmp(arg, "-d") == 0 || strcmp(arg, "--debug") == 0) {
-            if (g_cli.debug_level > 0) { fprintf(stderr, "Note: -d has no effect (-D was set)\n"); }
+            if (g_cli.debug_level > 0) fprintf(stderr, "Note: -d has no effect (-D was set)\n");
             g_cli.debug_level = 1;
         } else if (strcmp(arg, "-l") == 0 || strcmp(arg, "--log") == 0) {
             if (i + 1 < argc && argv[i + 1][0] != '-') {
