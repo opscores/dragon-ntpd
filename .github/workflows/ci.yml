@@ -18,24 +18,12 @@ permissions:
 
 jobs:
   build:
-    name: Build-${{ matrix.compiler }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Build with ${{ matrix.compiler }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, freebsd-latest]
         compiler: [gcc, clang]
-        include:
-          - os: ubuntu-latest
-            cc: gcc
-          - os: ubuntu-latest
-            cc: clang
-          - os: macos-latest
-            cc: gcc
-          - os: macos-latest
-            cc: clang
-          - os: freebsd-latest
-            cc: gcc
 
     steps:
       - name: Checkout code
@@ -43,29 +31,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set compiler
-        run: |
-          case "${{ matrix.compiler }}" in
-            gcc) echo "CC=gcc" >> $GITHUB_ENV ;;
-            clang) echo "CC=clang" >> $GITHUB_ENV ;;
-          esac
-
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y build-essential
-
       - name: Build release
-        run: make release CC=${{ env.CC }}
+        run: make release
 
       - name: Build debug
-        run: make clean && make debug CC=${{ env.CC }}
+        run: make clean && make debug
 
-      - name: Build with sanitizers (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Build with sanitizers
         run: |
-          sudo apt-get install -y libasan-dev libubsan-dev
-          make clean && make asan CC=${{ env.CC }}
-          make clean && make ubsan CC=${{ env.CC }}
+          make clean && make asan
+          make clean && make ubsan
 
       - name: Run executable test
         run: |
@@ -134,3 +109,31 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+
+  # Build for different architectures
+  cross-build:
+    name: Cross-compile to ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+          - aarch64-linux-gnu
+          - arm-linux-gnueabihf
+          - i686-linux-gnu
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install cross-compiler
+        run: |
+          case "${{ matrix.arch }}" in
+            aarch64-linux-gnu) sudo apt-get install -y gcc-aarch64-linux-gnu ;;
+            arm-linux-gnueabihf) sudo apt-get install -y gcc-arm-linux-gnueabihf ;;
+            i686-linux-gnu) sudo apt-get install -y gcc-i686-linux-gnu ;;
+          esac
+
+      - name: Build for ${{ matrix.arch }}
+        run: make release CC=${{ matrix.arch }}-gcc

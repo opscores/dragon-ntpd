@@ -40,28 +40,14 @@ jobs:
 
   # Build and upload release on tag
   build-release:
-    name: Build ${{ matrix.os }}-${{ matrix.compiler }}
+    name: Build with ${{ matrix.compiler }}
     needs: [pre-release-check]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         compiler: [gcc, clang]
-        include:
-          - os: ubuntu-latest
-            cc: gcc
-            ext: tar.gz
-          - os: ubuntu-latest
-            cc: clang
-            ext: tar.gz
-          - os: macos-latest
-            cc: gcc
-            ext: tar.gz
-          - os: macos-latest
-            cc: clang
-            ext: tar.gz
 
     steps:
       - name: Checkout code
@@ -69,21 +55,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set compiler
+      - name: Build with ${{ matrix.compiler }}
         run: |
           case "${{ matrix.compiler }}" in
-            gcc) echo "CC=gcc" >> $GITHUB_ENV ;;
-            clang) echo "CC=clang" >> $GITHUB_ENV ;;
+            gcc) make release CC=gcc ;;
+            clang) make release CC=clang ;;
           esac
-
-      - name: Build release
-        run: make release CC=${{ env.CC }}
 
       - name: Package
         run: |
-          mkdir -p release/ntpd-${{ matrix.os }}-${{ matrix.compiler }}
-          cp ntpd release/
-          tar -czf release/ntpd-${{ matrix.os }}-${{ matrix.compiler }}.${{ matrix.ext }} release/ntpd-${{ matrix.os }}-${{ matrix.compiler }}/
+          ver=${GITHUB_REF#refs/tags/v}
+          mkdir -p release/ntpd-$ver-linux-${{ matrix.compiler }}
+          cp ntpd release/ntpd-$ver-linux-${{ matrix.compiler }}/
+          tar -czf release/ntpd-$ver-linux-${{ matrix.compiler }}.tar.gz release/ntpd-$ver-linux-${{ matrix.compiler }}/
 
       - name: Upload artifact
         uses: actions/upload-release-asset@v1
@@ -91,8 +75,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release/ntpd-${{ matrix.os }}-${{ matrix.compiler }}.${{ matrix.ext }}
-          asset_name: ntpd-${{ matrix.os }}-${{ matrix.compiler }}.${{ matrix.ext }}
+          asset_path: release/ntpd-$ver-linux-${{ matrix.compiler }}.tar.gz
+          asset_name: ntpd-$ver-linux-${{ matrix.compiler }}.tar.gz
           asset_content_type: application/gzip
 
   create-release:
