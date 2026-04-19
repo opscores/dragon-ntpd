@@ -251,9 +251,7 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
             }
 
             /* Check authentication status (RFC 5905 Section 8.4) */
-            if (ido_is_authenticated(&g_ido_state)) {
-                syslog(LOG_INFO, "I-DO: Authentication established");
-            }
+            if (ido_is_authenticated(&g_ido_state)) { syslog(LOG_INFO, "I-DO: Authentication established"); }
 
             /* Update state machine */
             uint8_t ret_state = ido_state_machine(&g_ido_state, IDO_STATE_IDLE);
@@ -265,9 +263,7 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
             /* Log capability flags if set */
             if (g_ido_state.ido_capabilities > 0) {
                 for (uint8_t i = 0; i < 8; i++) {
-                    if ((g_ido_state.ido_capabilities & (1 << i)) != 0) {
-                        syslog(LOG_DEBUG, "I-DO: Capability %u: %s", i, ido_capability_name(i));
-                    }
+                    if ((g_ido_state.ido_capabilities & (1 << i)) != 0) { syslog(LOG_DEBUG, "I-DO: Capability %u: %s", i, ido_capability_name(i)); }
                 }
             }
 

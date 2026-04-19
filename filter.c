@@ -132,7 +132,10 @@ int marx_filter_outliers(NtpSample* samples, int count, int k) {
             filtered++;
         } else {
             /* Remove outlier sample (RFC 5905 Section 10) */
-            syslog(LOG_DEBUG, "MARX: Removing outlier sample at index %d (delay: %lus > threshold: %lus)", i, samples[i].delay, threshold);
+            syslog(LOG_DEBUG,
+                   "MARX: Removing outlier sample at index %d (delay: %lus > "
+                   "threshold: %lus)",
+                   i, samples[i].delay, threshold);
             marx_remove_sample(i);
         }
     }
