@@ -7,11 +7,13 @@
  * - CERT C Security guidelines
  * - Linux Kernel coding style
  *
- * Author: NTPD Development Team
+ * Author: DNTPD Development Team
  * License: BSD-style
  */
 
 #include "network.h"
+#include "network4.h"
+#include "network6.h"
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -129,8 +131,6 @@ int create_network_socket(const NetworkConfig *config,
 			  char *error_buf, size_t error_buf_size)
 {
 	int sock = -1;
-	int family;
-	int ret;
 
 	if (!config) {
 		if (error_buf && error_buf_size > 0) {
@@ -142,18 +142,17 @@ int create_network_socket(const NetworkConfig *config,
 
 	switch (config->family_preference) {
 	case NETWORK_FAMILY_IPV4_ONLY:
-		family = AF_INET;
+		sock = network4_create_socket(config->ntp_port);
 		break;
 	case NETWORK_FAMILY_IPV6_ONLY:
-		family = AF_INET6;
+		sock = network6_create_socket(config->ntp_port);
 		break;
 	case NETWORK_FAMILY_DUAL_STACK:
 	default:
-		family = AF_INET6;
+		sock = network6_create_socket(config->ntp_port);
 		break;
 	}
 
-	sock = socket(family, SOCK_DGRAM, IPPROTO_UDP);
 	if (sock < 0) {
 		if (error_buf && error_buf_size > 0) {
 			snprintf(error_buf, error_buf_size,
@@ -163,31 +162,13 @@ int create_network_socket(const NetworkConfig *config,
 		return -1;
 	}
 
-	ret = enable_reuse_address(sock);
-	if (ret < 0) {
-		if (error_buf && error_buf_size > 0) {
-			snprintf(error_buf, error_buf_size,
-				 "create_network_socket: SO_REUSEADDR failed: %s",
-				 get_error_msg(errno));
-		}
-		close(sock);
-		return -1;
+	network4_enable_reuseaddr(sock);
+
+	if (config->family_preference == NETWORK_FAMILY_IPV6_ONLY) {
+		network6_set_v6only(sock, true);
 	}
 
-	if (family == AF_INET6) {
-		ret = enable_ipv6_v6only(sock,
-				       config->family_preference ==
-				       NETWORK_FAMILY_IPV6_ONLY);
-		if (ret < 0) {
-			if (error_buf && error_buf_size > 0) {
-				snprintf(error_buf, error_buf_size,
-					 "create_network_socket: IPV6_V6ONLY failed: %s",
-					 get_error_msg(errno));
-			}
-			close(sock);
-			return -1;
-		}
-	}
+	int ret = 0;
 
 	if (config->options.recv_buffer_size > 0) {
 		int send_sz = config->options.send_buffer_size;
@@ -235,10 +216,6 @@ int create_network_socket(const NetworkConfig *config,
  */
 int bind_network_socket(int sock, const NetworkConfig *config)
 {
-	struct sockaddr_storage addr;
-	struct sockaddr_in *addr4;
-	struct sockaddr_in6 *addr6;
-	socklen_t addr_len;
 	int family;
 	int ret;
 
@@ -251,45 +228,12 @@ int bind_network_socket(int sock, const NetworkConfig *config)
 	if (family < 0)
 		return -1;
 
-	memset(&addr, 0, sizeof(addr));
-
 	if (family == AF_INET) {
-		addr4 = (struct sockaddr_in *)&addr;
-		addr4->sin_family = AF_INET;
-		addr4->sin_port = hport(config->ntp_port);
-		addr_len = sizeof(*addr4);
-
-		if (config->interface[0] != '\0') {
-			ret = inet_pton(AF_INET, config->interface,
-				       &addr4->sin_addr);
-			if (ret != 1) {
-				addr4->sin_addr.s_addr = htonl(INADDR_ANY);
-			}
-		} else {
-			addr4->sin_addr.s_addr = htonl(INADDR_ANY);
-		}
+		ret = network4_bind_socket(sock, config->interface, config->ntp_port);
 	} else {
-		addr6 = (struct sockaddr_in6 *)&addr;
-		addr6->sin6_family = AF_INET6;
-		addr6->sin6_port = hport(config->ntp_port);
-		addr6->sin6_flowinfo = 0;
-		addr_len = sizeof(*addr6);
-
-		if (config->bind_to_interface && config->interface[0] != '\0') {
-			unsigned int ifindex = if_nametoindex(config->interface);
-			if (ifindex > 0) {
-				addr6->sin6_scope_id = ifindex;
-			} else {
-				addr6->sin6_scope_id = 0;
-			}
-		} else {
-			addr6->sin6_scope_id = 0;
-		}
-
-		addr6->sin6_addr = in6addr_any;
+		ret = network6_bind_socket(sock, config->interface, config->ntp_port);
 	}
 
-	ret = bind(sock, (struct sockaddr *)&addr, addr_len);
 	if (ret < 0)
 		return -1;
 
