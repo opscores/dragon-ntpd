@@ -25,12 +25,20 @@ A production-grade NTP server implementation written in C, fully compliant with 
 # Build
 make release
 
-# Run (requires root for port 123)
-sudo ./dntpd -f
+# Run (requires root/sudo for port 123)
+sudo ./dntpd -c /etc/dntpd/dntpd.conf -f
 
 # Or with systemd
 sudo cp systemd/dntpd.service /etc/systemd/system/
 sudo systemctl enable --now dntpd
+```
+
+**Config file format** (`/etc/dntpd/dntpd.conf`):
+
+```
+# One NTP server per line: ip:port
+pool.ntp.org:123
+time.google.com:123
 ```
 
 ## Command Line Options
@@ -39,15 +47,18 @@ sudo systemctl enable --now dntpd
 |--------|-------------|
 | `-4` | Use IPv4 only |
 | `-6` | Use IPv6 only |
-| `-f` | Run in foreground |
+| `-f, -n` | Run in foreground (no daemonize) |
 | `-d` | Enable debug mode |
-| `-D N` | Debug level (0-3) |
-| `-c FILE` | Config file path |
+| `-D N, -D=N` | Debug level (0-3) |
+| `-c FILE` | Config file path (default: /etc/dntpd/dntpd.conf) |
 | `-l FILE` | Log file path |
-| `-t SEC` | Sync timeout (default: 30) |
+| `-t SEC` | Sync timeout in seconds (1-86400, default: 30) |
 | `-I IF` | Network interface |
 | `-u USER` | Run as user |
 | `-p FILE` | PID file path |
+| `-b` | Enable broadcast mode |
+| `-B ADDR` | Broadcast address |
+| `-q` | Quit after first sync (testing) |
 
 ## Architecture
 
@@ -90,15 +101,6 @@ make format
 
 # Run static analysis
 make lint
-```
-
-## Configuration
-
-Create `/etc/dntpd/dntpd.conf`:
-
-```
-pool.ntp.org:123
-time.google.com:123
 ```
 
 ## Requirements
