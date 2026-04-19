@@ -14,8 +14,6 @@
 #include "network.h"
 #include "network4.h"
 #include "network6.h"
-#include "network4.h"
-#include "network6.h"
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -164,7 +162,12 @@ int create_network_socket(const NetworkConfig *config,
 		return -1;
 	}
 
-	network4_enable_reuseaddr(sock);
+	/* Enable SO_REUSEADDR for the socket family */
+	if (config->family_preference == NETWORK_FAMILY_IPV4_ONLY) {
+		network4_enable_reuseaddr(sock);
+	} else {
+		network6_enable_reuseaddr(sock);
+	}
 
 	if (config->family_preference == NETWORK_FAMILY_IPV6_ONLY) {
 		network6_set_v6only(sock, true);
