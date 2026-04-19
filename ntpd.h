@@ -126,16 +126,17 @@ typedef struct {
 } PeerRequestData;
 
 typedef struct {
-    char *config_file;
-    char *pid_file;
-    char *log_file;
-    char *run_user;
-    char *interface;
-    int foreground;
-    int debug_level;
-    int no_daemonize;
-    int timeout_sec;
-    int quit_after_sync;
+	char *config_file;
+	char *pid_file;
+	char *log_file;
+	char *run_user;
+	char *interface;
+	int foreground;
+	int debug_level;
+	int no_daemonize;
+	int timeout_sec;
+	int quit_after_sync;
+	int family_preference;  /* 0=dual-stack, 1=IPv4-only, 2=IPv6-only */
 } CliConfig;
 
 extern ServerConfig *g_servers;

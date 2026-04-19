@@ -1,5 +1,6 @@
 #include "ntpd.h"
 #include "mode_handler.h"
+#include "network.h"
 #include <stdlib.h>
 #include <sys/select.h>
 
@@ -7,65 +8,94 @@ int g_sync_sock = -1;
 static int g_tcp_sock = -1;
 static pthread_mutex_t g_tcp_sock_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int get_sync_socket(void) {
-    if (g_sync_sock >= 0) return g_sync_sock;
+int get_sync_socket(void)
+{
+	if (g_sync_sock >= 0)
+		return g_sync_sock;
 
-    g_sync_sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (g_sync_sock < 0) {
-        syslog(LOG_ERR, "Не удалось создать сокет синхронизации: %s", strerror(errno));
-        return -1;
-    }
+	int family = (g_cli.family_preference == 2) ? AF_INET6 : AF_INET;
 
-    int reuse = 1;
-    setsockopt(g_sync_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+	g_sync_sock = socket(family, SOCK_DGRAM, 0);
+	if (g_sync_sock < 0) {
+		syslog(LOG_ERR, "Не удалось создать сокет синхронизации: %s", strerror(errno));
+		return -1;
+	}
 
-    return g_sync_sock;
+	int reuse = 1;
+	setsockopt(g_sync_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+
+	return g_sync_sock;
 }
 
-int create_udp_socket(int port) {
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) {
-        syslog(LOG_ERR, "Ошибка создания сокета: %s", strerror(errno));
-        return -1;
-    }
+int create_udp_socket(int port)
+{
+	int family = (g_cli.family_preference == 2) ? AF_INET6 : AF_INET;
 
-    if (port <= 0 || port > 65535) {
-        syslog(LOG_ERR, "Неверный порт для bind: %d", port);
-        close_socket(sock);
-        return -1;
-    }
+	int sock = socket(family, SOCK_DGRAM, 0);
+	if (sock < 0) {
+		syslog(LOG_ERR, "Ошибка создания сокета: %s", strerror(errno));
+		return -1;
+	}
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
+	if (port <= 0 || port > 65535) {
+		syslog(LOG_ERR, "Неверный порт для bind: %d", port);
+		close_socket(sock);
+		return -1;
+	}
 
-    if (g_cli.interface != NULL) {
-        struct ifreq ifr;
-        memset(&ifr, 0, sizeof(ifr));
-        snprintf(ifr.ifr_name, IFNAMSZ, "%s", g_cli.interface);
+	if (family == AF_INET6) {
+		struct sockaddr_in6 addr;
+		memset(&addr, 0, sizeof(addr));
+		addr.sin6_family = AF_INET6;
+		addr.sin6_port = htons((uint16_t)port);
+		addr.sin6_addr = in6addr_any;
 
-        if (ioctl(sock, SIOCGIFADDR, &ifr) == 0) {
-            struct sockaddr_in *ifa_addr = (struct sockaddr_in *)&ifr.ifr_addr;
-            addr.sin_addr = ifa_addr->sin_addr;
-            syslog(LOG_INFO, "Привязка к интерфейсу %s: %s",
-                 g_cli.interface, inet_ntoa(addr.sin_addr));
-        } else {
-            syslog(LOG_WARNING, "Не удалось получить адрес интерфейса %s: %s",
-                  g_cli.interface, strerror(errno));
-            addr.sin_addr.s_addr = INADDR_ANY;
-        }
-    } else {
-        addr.sin_addr.s_addr = INADDR_ANY;
-    }
+		if (g_cli.interface != NULL) {
+			unsigned int ifindex = if_nametoindex(g_cli.interface);
+			if (ifindex > 0) {
+				addr.sin6_scope_id = ifindex;
+				syslog(LOG_INFO, "Привязка к интерфейсу %s (IPv6)", g_cli.interface);
+			}
+		}
 
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
-        close_socket(sock);
-        return -1;
-    }
+		if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+			syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
+			close_socket(sock);
+			return -1;
+		}
+	} else {
+		struct sockaddr_in addr;
+		memset(&addr, 0, sizeof(addr));
+		addr.sin_family = AF_INET;
+		addr.sin_port = htons((uint16_t)port);
 
-    return sock;
+		if (g_cli.interface != NULL) {
+			struct ifreq ifr;
+			memset(&ifr, 0, sizeof(ifr));
+			snprintf(ifr.ifr_name, IFNAMSZ, "%s", g_cli.interface);
+
+			if (ioctl(sock, SIOCGIFADDR, &ifr) == 0) {
+				struct sockaddr_in *ifa_addr = (struct sockaddr_in *)&ifr.ifr_addr;
+				addr.sin_addr = ifa_addr->sin_addr;
+				syslog(LOG_INFO, "Привязка к интерфейсу %s: %s",
+				     g_cli.interface, inet_ntoa(addr.sin_addr));
+			} else {
+				syslog(LOG_WARNING, "Не удалось получить адрес интерфейса %s: %s",
+				      g_cli.interface, strerror(errno));
+				addr.sin_addr.s_addr = INADDR_ANY;
+			}
+		} else {
+			addr.sin_addr.s_addr = INADDR_ANY;
+		}
+
+		if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+			syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
+			close_socket(sock);
+			return -1;
+		}
+	}
+
+	return sock;
 }
 
 /**

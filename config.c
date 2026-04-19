@@ -10,16 +10,17 @@
 #define RET_VERSION 3
 
 CliConfig g_cli = {
-    .config_file = DEFAULT_CONFIG_FILE,
-    .pid_file = DEFAULT_PID_FILE,
-    .log_file = NULL,
-    .run_user = NULL,
-    .interface = NULL,
-    .foreground = 0,
-    .debug_level = 0,
-    .no_daemonize = 0,
-    .timeout_sec = SYNC_INTERVAL_SECONDS,
-    .quit_after_sync = 0
+	.config_file = DEFAULT_CONFIG_FILE,
+	.pid_file = DEFAULT_PID_FILE,
+	.log_file = NULL,
+	.run_user = NULL,
+	.interface = NULL,
+	.foreground = 0,
+	.debug_level = 0,
+	.no_daemonize = 0,
+	.timeout_sec = SYNC_INTERVAL_SECONDS,
+	.quit_after_sync = 0,
+	.family_preference = 0
 };
 
 void print_usage(const char *prog)
@@ -40,9 +41,10 @@ void print_usage(const char *prog)
     printf("  -t, --timeout=SEC  Sync timeout in seconds (%d-%d, default: %d)\n",
            MIN_TIMEOUT_SEC, MAX_TIMEOUT_SEC, SYNC_INTERVAL_SECONDS);
     printf("  -q, --quit         Quit after first sync (testing)\n");
-    printf("  -I, --interface=IF Use specific network interface\n");
-    printf("  -4, --ipv4-only    Use IPv4 only (default)\n");
-    printf("  -u, --user=USER    Run as specified user\n");
+printf("  -I, --interface=IF Use specific network interface\n");
+	printf("  -4, --ipv4        Use IPv4 only (default: dual-stack)\n");
+	printf("  -6, --ipv6        Use IPv6 only\n");
+	printf("  -u, --user=USER    Run as specified user\n");
     printf("  -p, --pid=FILE     PID file path (default: %s)\n",
            DEFAULT_PID_FILE);
     printf("\n");
@@ -181,6 +183,10 @@ int parse_arguments(int argc, char *argv[])
             }
         } else if (strncmp(arg, "--pid=", 6) == 0) {
             g_cli.pid_file = arg + 6;
+        } else if (strcmp(arg, "-4") == 0 || strcmp(arg, "--ipv4") == 0) {
+            g_cli.family_preference = 1;
+        } else if (strcmp(arg, "-6") == 0 || strcmp(arg, "--ipv6") == 0) {
+            g_cli.family_preference = 2;
         } else if (strcmp(arg, "-q") == 0 || strcmp(arg, "--quit") == 0) {
             g_cli.quit_after_sync = 1;
         } else {
