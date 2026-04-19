@@ -21,6 +21,13 @@
 
 #define NETWORK4_MAX_ADDR_LEN  16
 #define NETWORK4_PORT           123
+#define NETWORK4_BROADCAST_PORT 123
+
+#define NETWORK4_BROADCAST_ADDR     "255.255.255.255"
+#define NETWORK4_DEFAULT_BROADCAST_INTERVAL 64
+
+#define NETWORK4_MIN_BROADCAST_INTERVAL 32
+#define NETWORK4_MAX_BROADCAST_INTERVAL 128
 
 typedef struct {
     struct sockaddr_in addr;
@@ -65,6 +72,12 @@ bool network4_addresses_equal(const struct sockaddr_in *a,
 int network4_enable_reuseaddr(int sock);
 
 int network4_set_timeout(int sock, int seconds);
+
+int network4_enable_broadcast(int sock);
+
+int network4_set_broadcast_addr(struct sockaddr_in *addr,
+                                const char *broadcast_ip,
+                                uint16_t port);
 
 void network4_close_socket(int sock);
 

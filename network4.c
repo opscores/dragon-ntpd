@@ -210,3 +210,48 @@ void network4_close_socket(int sock)
         close(sock);
     }
 }
+
+int network4_enable_broadcast(int sock)
+{
+    if (sock < 0) {
+        return -1;
+    }
+
+    int broadcast = 1;
+    socklen_t optlen = sizeof(broadcast);
+
+    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST,
+                   &broadcast, optlen) < 0) {
+        syslog(LOG_WARNING, "IPv4: SO_BROADCAST failed: %s",
+               strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+int network4_set_broadcast_addr(struct sockaddr_in *addr,
+                                const char *broadcast_ip,
+                                uint16_t port)
+{
+    if (addr == NULL) {
+        return -1;
+    }
+
+    memset(addr, 0, sizeof(*addr));
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons(port);
+
+    if (broadcast_ip != NULL && broadcast_ip[0] != '\0') {
+        if (inet_pton(AF_INET, broadcast_ip, &addr->sin_addr) <= 0) {
+            syslog(LOG_WARNING,
+                   "IPv4: invalid broadcast address '%s', using default",
+                   broadcast_ip);
+            addr->sin_addr.s_addr = htonl(INADDR_BROADCAST);
+        }
+    } else {
+        addr->sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    }
+
+    return 0;
+}

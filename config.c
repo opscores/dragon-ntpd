@@ -20,7 +20,10 @@ CliConfig g_cli = {
 	.no_daemonize = 0,
 	.timeout_sec = SYNC_INTERVAL_SECONDS,
 	.quit_after_sync = 0,
-	.family_preference = 0
+	.family_preference = 0,
+	.broadcast_mode = 0,
+	.broadcast_addr = NULL,
+	.broadcast_interval = 64
 };
 
 void print_usage(const char *prog)
@@ -44,6 +47,8 @@ void print_usage(const char *prog)
 printf("  -I, --interface=IF Use specific network interface\n");
 	printf("  -4, --ipv4        Use IPv4 only (default: dual-stack)\n");
 	printf("  -6, --ipv6        Use IPv6 only\n");
+	printf("  -b, --broadcast   Enable broadcast mode (RFC 5905)\n");
+	printf("  -B, --broadcast-addr=IP  Broadcast address (default: 255.255.255.255)\n");
 	printf("  -u, --user=USER    Run as specified user\n");
     printf("  -p, --pid=FILE     PID file path (default: %s)\n",
            DEFAULT_PID_FILE);
@@ -187,6 +192,14 @@ int parse_arguments(int argc, char *argv[])
             g_cli.family_preference = 1;
         } else if (strcmp(arg, "-6") == 0 || strcmp(arg, "--ipv6") == 0) {
             g_cli.family_preference = 2;
+        } else if (strcmp(arg, "-b") == 0 || strcmp(arg, "--broadcast") == 0) {
+            g_cli.broadcast_mode = 1;
+        } else if (strncmp(arg, "-B=", 3) == 0) {
+            free(g_cli.broadcast_addr);
+            g_cli.broadcast_addr = strndup(arg + 3, INET_ADDRSTRLEN - 1);
+        } else if (strncmp(arg, "--broadcast-addr=", 17) == 0) {
+            free(g_cli.broadcast_addr);
+            g_cli.broadcast_addr = strndup(arg + 17, INET_ADDRSTRLEN - 1);
         } else if (strcmp(arg, "-q") == 0 || strcmp(arg, "--quit") == 0) {
             g_cli.quit_after_sync = 1;
         } else {

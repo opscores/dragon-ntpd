@@ -9,6 +9,50 @@
 int g_sync_sock = -1;
 static int g_tcp_sock = -1;
 static pthread_mutex_t g_tcp_sock_mutex = PTHREAD_MUTEX_INITIALIZER;
+static time_t g_last_broadcast = 0;
+
+static int send_broadcast_response(const uint8_t *response, size_t len)
+{
+    if (!g_cli.broadcast_mode) {
+        return 0;
+    }
+
+    time_t now = time(NULL);
+    if (g_cli.broadcast_interval > 0 &&
+        (now - g_last_broadcast) < g_cli.broadcast_interval) {
+        return 0;
+    }
+
+    int sock = network4_create_socket(0);
+    if (sock < 0) {
+        return -1;
+    }
+
+    if (network4_enable_broadcast(sock) < 0) {
+        network4_close_socket(sock);
+        return -1;
+    }
+
+    struct sockaddr_in broadcast_addr;
+    network4_set_broadcast_addr(&broadcast_addr,
+                                g_cli.broadcast_addr,
+                                NTP_PORT);
+
+    ssize_t sent = network4_sendto(sock, response, len, &broadcast_addr);
+    network4_close_socket(sock);
+
+    if (sent < 0) {
+        syslog(LOG_WARNING, "Broadcast send failed: %s", strerror(errno));
+        return -1;
+    }
+
+    g_last_broadcast = now;
+    syslog(LOG_INFO, "Broadcast response sent to %s:%d",
+           g_cli.broadcast_addr ? g_cli.broadcast_addr : NETWORK4_BROADCAST_ADDR,
+           NTP_PORT);
+
+    return 0;
+}
 
 int get_sync_socket(void)
 {
@@ -197,6 +241,13 @@ static void *handle_peer_request_thread(void *arg) {
                mode == NTP_MODE_SYMMETRIC_PASSIVE) {
         response_mode = NTP_MODE_SYMMETRIC_PASSIVE;
     } else if (mode == NTP_MODE_BROADCAST) {
+        if (!g_cli.broadcast_mode) {
+            syslog(LOG_DEBUG, "Broadcast mode disabled, ignoring broadcast request");
+            free(data->buffer);
+            free(data);
+            return NULL;
+        }
+        response_mode = NTP_MODE_BROADCAST;
     } else {
         syslog(LOG_WARNING, "Неизвестный mode %u от %s:%s", mode, ip, port);
         free(data->buffer);
@@ -321,6 +372,10 @@ static void *handle_peer_request_thread(void *arg) {
     }
 
     network4_close_socket(sock);
+
+    if (response_mode == NTP_MODE_BROADCAST) {
+        send_broadcast_response(response, sizeof(response));
+    }
 
     rate_limit_update(ip);
 
