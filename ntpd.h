@@ -2,6 +2,7 @@
 #define NTPD_H
 
 #define _DEFAULT_SOURCE
+#define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -20,6 +21,7 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/timex.h>
 #include <math.h>
 #include <signal.h>
 #include <pthread.h>
@@ -65,6 +67,15 @@
 #define DEFAULT_LOG_FILE "/var/log/dntpd.log"
 #define SYNC_RETRY_INTERVAL_SEC 15
 #define DEFAULT_NTPQ_PORT 323
+
+/* RFC 5905 Section 11.3 - Clock Discipline */
+#define CLOCK_PHI 15e-6               /* Max frequency error (s/s) = 15 PPM */
+#define CLOCK_PLLGAIN 8                /* PLL loop gain (log2) */
+#define CLOCK_FLLGAIN 4                /* FLL loop gain (log2) */
+#define CLOCK_ALLAN_INTERCEPT 2048      /* Allan intercept (sec), poll >= 11 */
+#define FREQ_UPDATE_INTERVAL_MIN_SEC 64
+#define FREQ_FILE STATE_DIR "/frequency"
+#define FREQ_OFFSET_MAX_PPM 128.0     /* Max frequency offset (PPM) */
 
 #define NTP_LI_MASK   0xC0
 #define NTP_VN_MASK   0x38
@@ -126,19 +137,37 @@ typedef struct {
     char port[16];
 } PeerRequestData;
 
+/* RFC 5905 Section 11.3 - Clock Discipline State */
 typedef struct {
-	char *config_file;
-	char *pid_file;
-	char *log_file;
-	char *run_user;
-	char *interface;
-	int foreground;
-	int debug_level;
-	int no_daemonize;
-	int timeout_sec;
-	int quit_after_sync;
-	int family_preference;  /* 0=dual-stack, 1=IPv4-only, 2=IPv6-only */
-} CliConfig;
+    double ppm;
+    time_t last_update;
+    int64_t last_offset_us;
+    int state;
+} FreqState;
+
+/* Clock discipline states */
+#define FREQ_STATE_NSET 0
+#define FREQ_STATE_FSET 1
+#define FREQ_STATE_SYNC 2
+
+typedef struct {
+ 	char *config_file;
+ 	char *pid_file;
+ 	char *log_file;
+ 	char *run_user;
+ 	char *interface;
+ 	int foreground;
+ 	int debug_level;
+ 	int no_daemonize;
+ 	int timeout_sec;
+ 	int quit_after_sync;
+ 	int family_preference;  /* 0=dual-stack, 1=IPv4-only, 2=IPv6-only */
+
+ 	/* RFC 5905 Section 5.2 - Broadcast mode */
+ 	int broadcast_mode;           /* 0=disabled, 1=enabled */
+ 	char *broadcast_addr;         /* Custom broadcast address (NULL = default) */
+ 	int broadcast_interval;       /* Interval in seconds (32-128, default: 64) */
+ } CliConfig;
 
 extern ServerConfig *g_servers;
 extern int g_server_count;
@@ -158,6 +187,7 @@ extern time_t g_last_dispersion_update;
 extern int8_t g_local_precision;
 extern int8_t g_local_poll;
 extern int8_t g_peer_poll;
+extern FreqState g_freq_state;
 extern IdoState g_ido_state;  /* I-DO state (RFC 5905 Section 8.4) */
 
 extern CliConfig g_cli;
@@ -185,6 +215,10 @@ bool calculate_delay_offset(const NtpTimestamp *t1, const NtpTimestamp *t2,
 bool handle_leap_indicator(uint8_t li);
 uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum);
 uint8_t compute_system_offset(int64_t *offsets, int count, int *best_idx);
+int select_best_peers(const int64_t *offsets, const uint64_t *jitter, int count,
+                   int *valid_indices, int *valid_count);
+int64_t majority_vote(const int64_t *offsets, int count);
+bool is_false_ticker(int64_t peer_offset, int64_t cluster_offset);
 uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us);
 int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us);
 uint32_t ntp_u16_16_from_us(uint64_t us);
@@ -199,6 +233,14 @@ NtpTimestamp ntp_timestamp_now(void);
 int8_t get_system_precision(void);
 int apply_time_correction_slew_or_step(int64_t offset_us);
 int sync_ntp_time(const char *ip, const char *port);
+
+/* RFC 5905 Section 11.3 - Frequency Adjustment */
+int init_frequency_discipline(void);
+int load_frequency_persistent(void);
+int save_frequency_persistent(void);
+double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec);
+int apply_frequency_adjustment(double ppm);
+int update_frequency_discipline(int64_t offset_us, int poll_exp);
 
 int create_udp_socket(int port);
 void close_socket(int sock);

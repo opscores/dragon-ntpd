@@ -1,4 +1,6 @@
+#define _GNU_SOURCE
 #include "ntpd.h"
+#include <sys/timex.h>
 
 /**
  * get_system_precision - Get system clock precision
@@ -101,6 +103,194 @@ int apply_time_correction_slew_or_step(int64_t offset_us) {
         delta.tv_sec -= 1;
     }
     return adjtime(&delta, NULL);
+}
+
+static int freq_file_write(double ppm) {
+    FILE *fp = fopen(FREQ_FILE, "w");
+    if (fp == NULL) {
+        syslog(LOG_DEBUG, "Cannot open frequency file for write: %s", strerror(errno));
+        return -1;
+    }
+    fprintf(fp, "%.9f\n", ppm);
+    fclose(fp);
+    return 0;
+}
+
+static int freq_file_read(double *ppm_out) {
+    FILE *fp = fopen(FREQ_FILE, "r");
+    if (fp == NULL) {
+        return -1;
+    }
+    if (fscanf(fp, "%lf", ppm_out) != 1) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+    return 0;
+}
+
+int load_frequency_persistent(void) {
+    double ppm = 0.0;
+    if (freq_file_read(&ppm) == 0) {
+        if (ppm > -FREQ_OFFSET_MAX_PPM && ppm < FREQ_OFFSET_MAX_PPM) {
+            g_freq_state.ppm = ppm;
+            g_freq_state.state = FREQ_STATE_FSET;
+            syslog(LOG_INFO, "Loaded frequency offset: %.3f PPM", ppm);
+            return 0;
+        }
+    }
+    g_freq_state.state = FREQ_STATE_NSET;
+    return -1;
+}
+
+int save_frequency_persistent(void) {
+    if (g_freq_state.state != FREQ_STATE_SYNC) {
+        return 0;
+    }
+    freq_file_write(g_freq_state.ppm);
+    return 0;
+}
+
+int init_frequency_discipline(void) {
+    memset(&g_freq_state, 0, sizeof(g_freq_state));
+    g_freq_state.ppm = 0.0;
+    g_freq_state.state = FREQ_STATE_NSET;
+    g_freq_state.last_update = 0;
+    g_freq_state.last_offset_us = 0;
+    return 0;
+}
+
+static double clamp_frequency(double ppm) {
+    if (ppm > FREQ_OFFSET_MAX_PPM) return FREQ_OFFSET_MAX_PPM;
+    if (ppm < -FREQ_OFFSET_MAX_PPM) return -FREQ_OFFSET_MAX_PPM;
+    return ppm;
+}
+
+static double calculate_fll_ppm(int64_t offset_us, time_t delta_sec) {
+    if (delta_sec <= 0) return 0.0;
+    double offset_s = (double)offset_us / 1000000.0;
+    double ppm = (offset_s / (double)delta_sec) * 1000000.0;
+    return clamp_frequency(ppm);
+}
+
+static double calculate_pll_ppm(int64_t offset_us, time_t last_update) {
+    if (last_update <= 0) return 0.0;
+    time_t now = time(NULL);
+    if (now <= last_update) return 0.0;
+    time_t dt = now - last_update;
+    double offset_s = (double)offset_us / 1000000.0;
+    double ppm = (offset_s / (double)dt) * 1000000.0;
+    return clamp_frequency(ppm);
+}
+
+static int apply_freq_adjtime(double ppm) {
+    double adj_sec = ppm / 1000000.0;
+    struct timeval delta;
+    delta.tv_sec = (time_t)(adj_sec);
+    delta.tv_usec = (suseconds_t)((adj_sec - (double)delta.tv_sec) * 1000000.0);
+    if (delta.tv_usec < 0) {
+        delta.tv_usec += 1000000;
+        delta.tv_sec -= 1;
+    }
+    if (delta.tv_sec > 0 || (delta.tv_sec == 0 && delta.tv_usec > 100)) {
+        delta.tv_sec = 0;
+        delta.tv_usec = 100;
+    }
+    if (delta.tv_sec < 0 || (delta.tv_sec == 0 && delta.tv_usec < -100)) {
+        delta.tv_sec = 0;
+        delta.tv_usec = -100;
+    }
+    int ret = adjtime(&delta, NULL);
+    if (ret < 0) {
+        syslog(LOG_DEBUG, "adjtime frequency correction failed: %s", strerror(errno));
+    }
+    return ret;
+}
+
+static int apply_freq_adjtimex(double ppm) {
+#ifdef __linux__
+    struct timex tx;
+    memset(&tx, 0, sizeof(tx));
+    tx.modes = 0x0002;
+    tx.freq = (long)(ppm * 65536.0);
+    int ret = adjtimex(&tx);
+    if (ret < 0) {
+        syslog(LOG_DEBUG, "adjtimex frequency correction failed: %s", strerror(errno));
+        return -1;
+    }
+    if ((tx.status & 0x0040) != 0) {
+        syslog(LOG_WARNING, "Clock unsynced by kernel");
+        return -1;
+    }
+    return ret;
+#else
+    (void)ppm;
+    return -1;
+#endif
+}
+
+int apply_frequency_adjustment(double ppm) {
+    double clamped = clamp_frequency(ppm);
+    if (fabs(clamped) < 0.001) {
+        return 0;
+    }
+    if (apply_freq_adjtimex(clamped) == 0) {
+        g_freq_state.ppm = clamped;
+        return 0;
+    }
+    return apply_freq_adjtime(clamped);
+}
+
+double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec) {
+    if (delta_sec < FREQ_UPDATE_INTERVAL_MIN_SEC) {
+        return calculate_pll_ppm(offset_us, (time_t)g_freq_state.last_update);
+    }
+    return calculate_fll_ppm(offset_us, delta_sec);
+}
+
+int update_frequency_discipline(int64_t offset_us, int poll_exp) {
+    time_t now = time(NULL);
+    time_t tc = 1LL << poll_exp;
+    if (tc < FREQ_UPDATE_INTERVAL_MIN_SEC) {
+        tc = FREQ_UPDATE_INTERVAL_MIN_SEC;
+    }
+    double new_ppm = 0.0;
+    if (g_freq_state.state == FREQ_STATE_NSET) {
+        time_t delta = now - g_freq_state.last_update;
+        if (delta >= tc) {
+            new_ppm = calculate_fll_ppm(offset_us, delta);
+            g_freq_state.ppm = new_ppm;
+            g_freq_state.state = FREQ_STATE_FSET;
+        }
+    } else if (g_freq_state.state == FREQ_STATE_FSET) {
+        time_t delta = now - g_freq_state.last_update;
+        if (delta >= tc) {
+            double old_ppm = g_freq_state.ppm;
+            double new_ppm_calc = calculate_fll_ppm(offset_us, delta);
+            new_ppm = old_ppm + (new_ppm_calc - old_ppm) / (double)(1 << CLOCK_FLLGAIN);
+            g_freq_state.ppm = new_ppm;
+            g_freq_state.state = FREQ_STATE_SYNC;
+        }
+    } else {
+        time_t delta = now - g_freq_state.last_update;
+        if (delta >= tc) {
+            double old_ppm = g_freq_state.ppm;
+            double new_ppm_calc;
+            if (poll_exp >= 11) {
+                new_ppm_calc = calculate_fll_ppm(offset_us, delta);
+            } else {
+                int64_t total_offset = offset_us;
+                time_t avg_dt = (delta + (time_t)g_freq_state.last_update) / 2;
+                new_ppm_calc = calculate_pll_ppm(total_offset, avg_dt);
+            }
+            double gain = (double)(1 << CLOCK_PLLGAIN);
+            new_ppm = old_ppm + (new_ppm_calc - old_ppm) / gain;
+            g_freq_state.ppm = new_ppm;
+        }
+    }
+    g_freq_state.last_update = now;
+    g_freq_state.last_offset_us = offset_us;
+    return apply_frequency_adjustment(g_freq_state.ppm);
 }
 
 int sync_ntp_time(const char *ip, const char *port) {
@@ -279,6 +469,7 @@ int sync_ntp_time(const char *ip, const char *port) {
                         } else {
                             syslog(LOG_WARNING, "Ошибка применения коррекции: %s", strerror(errno));
                         }
+                        update_frequency_discipline(filtered_offset, g_local_poll);
                     } else {
                         syslog(LOG_DEBUG, "Пропуск коррекции: недостаточно выборок");
                     }

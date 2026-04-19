@@ -23,6 +23,9 @@ int8_t g_peer_poll = 4;
 /* I-DO state (RFC 5905 Section 8.4) */
 IdoState g_ido_state;
 
+/* Frequency discipline state (RFC 5905 Section 11.3) */
+FreqState g_freq_state;
+
 void cleanup_resources(void) {
     syslog(LOG_INFO, "Очистка ресурсов...");
 
@@ -42,6 +45,9 @@ void cleanup_resources(void) {
 
     /* Очистка mode handler */
     mode_handler_cleanup();
+
+    /* Сохранение frequency state (RFC 5905 Section 11.3) */
+    save_frequency_persistent();
 
     if (g_cli.pid_file != NULL) {
         if (unlink(g_cli.pid_file) == 0) {
@@ -77,6 +83,43 @@ int load_server_config(void) {
     while (fgets(line, sizeof(line), fp)) {
         if (line[0] == '\n' || line[0] == '#' || line[0] == '\r')
             continue;
+
+        /* Broadcast configuration parsing */
+        if (strncmp(line, "enable_broadcast", 16) == 0) {
+            char *eq = strchr(line, '=');
+            if (eq != NULL) {
+                int val = (int)strtol(eq + 1, NULL, 10);
+                if (val == 1) {
+                    g_cli.broadcast_mode = 1;
+                    syslog(LOG_INFO, "Broadcast mode enabled from config");
+                }
+            }
+            continue;
+        } else if (strncmp(line, "broadcast_addr", 14) == 0) {
+            char *eq = strchr(line, '=');
+            if (eq != NULL && strlen(eq + 1) > 1) {
+                size_t len = strlen(eq + 1);
+                while (len > 0 && (eq[1 + len - 1] == '\n' || eq[1 + len - 1] == '\r')) {
+                    len--;
+                }
+                if (len > 0 && len < INET_ADDRSTRLEN) {
+                    free(g_cli.broadcast_addr);
+                    g_cli.broadcast_addr = strndup(eq + 1, len);
+                    syslog(LOG_INFO, "Broadcast address from config: %s", g_cli.broadcast_addr);
+                }
+            }
+            continue;
+        } else if (strncmp(line, "broadcast_interval", 18) == 0) {
+            char *eq = strchr(line, '=');
+            if (eq != NULL) {
+                int val = (int)strtol(eq + 1, NULL, 10);
+                if (val >= 32 && val <= 128) {
+                    g_cli.broadcast_interval = val;
+                    syslog(LOG_INFO, "Broadcast interval from config: %d seconds", val);
+                }
+            }
+            continue;
+        }
 
         char *colon = strchr(line, ':');
         if (!colon) {
@@ -279,6 +322,10 @@ int main(int argc, char *argv[]) {
 
     /* Инициализация I-DO state (RFC 5905 Section 8.4) */
     ido_state_init(&g_ido_state);
+
+    /* Инициализация frequency discipline (RFC 5905 Section 11.3) */
+    init_frequency_discipline();
+    load_frequency_persistent();
 
     syslog(LOG_NOTICE, "=====================================================================");
     int sync_interval_1 = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
