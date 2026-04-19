@@ -70,7 +70,7 @@ int load_server_config(void) {
     const char* config_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
     FILE* fp = fopen(config_path, "r");
     if (!fp) {
-        syslog(LOG_WARNING, "Конфигурационный файл не найден: %s", config_path);
+        syslog(LOG_WARNING, "Config file not found: %s", config_path);
         return 0;
     }
 
@@ -258,6 +258,14 @@ int main(int argc, char* argv[]) {
     syslog(LOG_INFO, "System precision: %d (2^%d = %.3f сек)", g_local_precision, g_local_precision,
            g_local_precision >= 0 ? (double)(1 << g_local_precision) : (double)1.0 / (double)(1LL << (-g_local_precision)));
 
+    g_server_count = load_server_config();
+    if (g_server_count == 0) {
+        const char* cfg_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
+        fprintf(stderr, "ERROR: No servers in %s\n", cfg_path);
+        closelog();
+        return EXIT_FAILURE;
+    }
+
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = signal_handler;
@@ -284,13 +292,6 @@ int main(int argc, char* argv[]) {
         if (g_cli.run_user != NULL) {
             if (apply_user_privileges(g_cli.run_user) != 0) { syslog(LOG_ERR, "Не удалось применить привилегии пользователя"); }
         }
-    }
-
-    g_server_count = load_server_config();
-    if (g_server_count == 0) {
-        syslog(LOG_CRIT, "Не удалось загрузить NTP-серверы. Завершение.");
-        closelog();
-        return EXIT_FAILURE;
     }
 
     /* Инициализация mode handler (Security-First) */
