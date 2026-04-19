@@ -2,16 +2,47 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - 'release/**'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # Verify release branch is stable before tagging
+  pre-release-check:
+    name: Pre-release validation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release
+        run: make release
+
+      - name: Run tests
+        run: make check
+
+      - name: Check version
+        run: |
+          echo "=== Version info ==="
+          ./ntpd -v 2>&1 | head -3
+
+  # Build and upload release on tag
   build-release:
     name: Build ${{ matrix.os }}-${{ matrix.compiler }}
+    needs: [pre-release-check]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,6 +66,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set compiler
         run: |
@@ -64,12 +97,16 @@ jobs:
 
   create-release:
     name: Create GitHub Release
+    needs: [build-release]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get version
         id: version
@@ -88,31 +125,3 @@ jobs:
           release_name: NTPD Release v${{ env.VERSION }}
           draft: false
           prerelease: false
-
-  create-release-arch:
-    name: Create Arch Linux Package
-    needs: build-release
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build release
-        run: make release
-
-      - name: Create Arch package
-        run: |
-          mkdir -p ntpd-${{ env.VERSION }}-x86_64
-          cp ntpd ntpd-${{ env.VERSION }}-x86_64/
-          tar -czf ntpd-${{ env.VERSION }}-x86_64.tar.gz ntpd-${{ env.VERSION }}-x86_64/
-
-      - name: Upload to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ntpd-${{ env.VERSION }}-x86_64.tar.gz
-          asset_name: ntpd-${{ env.VERSION }}-x86_64.tar.gz
-          asset_content_type: application/gzip
