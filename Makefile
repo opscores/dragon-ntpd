@@ -6,7 +6,7 @@ CC ?= cc
 TARGET := dntpd
 BUILD_TYPE ?= release
 
-SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c mode_handler.c
+SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c mode_handler.c network.c network4.c network6.c
 HDR := network.h ntpd.h ntp_packet.h threads.h socket.h time_sync.h filter.h config.h mode_handler.h ido.h
 
 # Base flags
