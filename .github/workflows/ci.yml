@@ -20,11 +20,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install pre-commit
+        run: |
+          pip install pre-commit
+          pre-commit install
+
       - name: Build release
         run: make release
 
       - name: Run tests
         run: ./dntpd -h
+
+      - name: Check formatting
+        run: clang-format --dry-run --Werror *.c *.h
 
   release:
     name: Release
