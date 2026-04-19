@@ -3,6 +3,7 @@
 *.a
 *.so
 *.la
+*.d
 ntpd
 ntpd.o
 ntpd.a
@@ -10,12 +11,12 @@ ntpd.so
 
 # Debug symbols
 *.dSYM/
-*.pdb
+core
+core.*
 
-# OS files (macOS, Windows)
+# OS files
 .DS_Store
 Thumbs.db
-desktop.ini
 
 # Editor/IDE files
 .vscode/
@@ -23,10 +24,7 @@ desktop.ini
 *.swp
 *.swo
 *~
-.project
 .settings/
-.classpath
-.nature
 
 # Log files
 *.log
@@ -59,3 +57,14 @@ ido_implementation.md
 
 # RFC documents (downloaded for reference)
 rfc*.txt
+
+# Compilation database
+compile_commands.json
+
+# Build directories
+/build/
+build/
+
+# AI assistant directories
+.qwen/
+.gemini/
