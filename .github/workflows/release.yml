@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build ${{ matrix.os }}-${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        compiler: [gcc, clang]
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            ext: tar.gz
+          - os: ubuntu-latest
+            cc: clang
+            ext: tar.gz
+          - os: macos-latest
+            cc: gcc
+            ext: tar.gz
+          - os: macos-latest
+            cc: clang
+            ext: tar.gz
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set compiler
+        run: |
+          case "${{ matrix.compiler }}" in
+            gcc) echo "CC=gcc" >> $GITHUB_ENV ;;
+            clang) echo "CC=clang" >> $GITHUB_ENV ;;
+          esac
+
+      - name: Build release
+        run: make release CC=${{ env.CC }}
+
+      - name: Package
+        run: |
+          mkdir -p release/ntpd-${{ matrix.os }}-${{ matrix.compiler }}
+          cp ntpd release/
+          tar -czf release/ntpd-${{ matrix.os }}-${{ matrix.compiler }}.${{ matrix.ext }} release/ntpd-${{ matrix.os }}-${{ matrix.compiler }}/
+
+      - name: Upload artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release/ntpd-${{ matrix.os }}-${{ matrix.compiler }}.${{ matrix.ext }}
+          asset_name: ntpd-${{ matrix.os }}-${{ matrix.compiler }}.${{ matrix.ext }}
+          asset_content_type: application/gzip
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: NTPD Release v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+
+  create-release-arch:
+    name: Create Arch Linux Package
+    needs: build-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build release
+        run: make release
+
+      - name: Create Arch package
+        run: |
+          mkdir -p ntpd-${{ env.VERSION }}-x86_64
+          cp ntpd ntpd-${{ env.VERSION }}-x86_64/
+          tar -czf ntpd-${{ env.VERSION }}-x86_64.tar.gz ntpd-${{ env.VERSION }}-x86_64/
+
+      - name: Upload to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ntpd-${{ env.VERSION }}-x86_64.tar.gz
+          asset_name: ntpd-${{ env.VERSION }}-x86_64.tar.gz
+          asset_content_type: application/gzip
