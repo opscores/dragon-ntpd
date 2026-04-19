@@ -1,8 +1,10 @@
 # DNTPD - NTP Server Implementation
 
-[![CI/CD](https://github.com/drakon/dntpd/actions/workflows/ci.yml/badge.svg)](https://github.com/drakon/dntpd/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/opscores/dragon-ntpd/ci.yml?label=build)](https://github.com/opscores/dragon-ntpd/actions)
+[![Release](https://img.shields.io/github/v/release/opscores/dragon-ntpd)](https://github.com/opscores/dragon-ntpd/releases)
+[![Last commit](https://img.shields.io/github/last-commit/opscores/dragon-ntpd/develop)](https://github.com/opscores/dragon-ntpd/commits/develop)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
-[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-green.svg)](https://github.com/drakon/dntpd)
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-green.svg)](https://github.com/opscores/dragon-ntpd)
 [![Standard: RFC 5905](https://img.shields.io/badge/Standard-RFC%205905-brightgreen.svg)](https://www.rfc-editor.org/rfc/rfc5905)
 
 A production-grade NTP server implementation written in C, fully compliant with [RFC 5905](https://www.rfc-editor.org/rfc/rfc5905). Designed for Linux with focus on security, performance, and POSIX compliance.
