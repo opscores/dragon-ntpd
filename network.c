@@ -14,6 +14,8 @@
 #include "network.h"
 #include "network4.h"
 #include "network6.h"
+#include "network4.h"
+#include "network6.h"
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
