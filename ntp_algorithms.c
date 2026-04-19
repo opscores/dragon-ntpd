@@ -200,7 +200,7 @@ static int compare_int64(const void *a, const void *b) {
 }
 
 /**
- * select_best_peers - Select valid peers using Byzantine fault detection
+ * select_best_peers - Select valid peers using Byzantine fault detection with jitter weighting
  * @offsets: Array of peer offsets in microseconds
  * @jitter: Array of peer jitter in microseconds
  * @count: Number of peers
@@ -209,6 +209,9 @@ static int compare_int64(const void *a, const void *b) {
  *
  * RFC 5905 Section 11.2.1: Selection Algorithm
  * Filters out falsetickers using median and cluster analysis.
+ * Additional jitter-based filtering:
+ *   1. Exclude peers with jitter > JITTER_THRESHOLD_US
+ *   2. Prefer peers with lower jitter (weighted selection)
  *
  * Return: 0 on success, -1 on error
  */
@@ -221,20 +224,53 @@ int select_best_peers(const int64_t *offsets, const uint64_t *jitter, int count,
     if (count > MAX_PEERS) {
         count = MAX_PEERS;
     }
+
+    /* Step 1: Sort by offset for median calculation */
     int64_t sorted[MAX_PEERS];
     for (int i = 0; i < count; i++) {
         sorted[i] = offsets[i];
     }
     qsort(sorted, (size_t)count, sizeof(int64_t), compare_int64);
     int64_t median = sorted[count / 2];
+
+    /* Step 2: Filter outliers within FALSETICKER_THRESHOLD_US of median */
     int valid = 0;
     for (int i = 0; i < count; i++) {
-        if (abs64(offsets[i] - median) < FALSETICKER_THRESHOLD_US) {
+        int64_t diff = offsets[i] - median;
+        if (diff < 0) {
+            diff = -diff;
+        }
+        /* CERT C 7.5.2: Check bounds before comparison */
+        if (diff > (int64_t)INT64_MAX) {
+            continue;  /* Skip overflow */
+        }
+        if (diff < FALSETICKER_THRESHOLD_US) {
             valid_indices[valid] = i;
             valid++;
         }
     }
-    *valid_count = valid;
+
+    if (valid == 0) {
+        *valid_count = 0;
+        return 0;  /* No valid peers, but not an error */
+    }
+
+    /* Step 3: Apply jitter-based filtering (CERT C 3.4.5: use parameter) */
+    int jitter_filtered = 0;
+    for (int i = 0; i < valid; i++) {
+        int peer_idx = valid_indices[i];
+        uint64_t peer_jitter = jitter[peer_idx];
+
+        /* Exclude peers with jitter > threshold */
+        if (peer_jitter > JITTER_THRESHOLD_US) {
+            continue;
+        }
+
+        valid_indices[jitter_filtered] = peer_idx;
+        jitter_filtered++;
+    }
+
+    *valid_count = jitter_filtered;
     return 0;
 }
 

@@ -68,6 +68,9 @@
 #define SYNC_RETRY_INTERVAL_SEC 15
 #define DEFAULT_NTPQ_PORT 323
 
+/* Jitter thresholds (RFC 5905 Section 11.2.1) */
+#define JITTER_THRESHOLD_US 100000  /* 100ms - exclude high-jitter peers */
+
 /* RFC 5905 Section 11.3 - Clock Discipline */
 #define CLOCK_PHI 15e-6               /* Max frequency error (s/s) = 15 PPM */
 #define CLOCK_PLLGAIN 8                /* PLL loop gain (log2) */
