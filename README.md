@@ -29,7 +29,7 @@ make release
 sudo ./dntpd -f
 
 # Or with systemd
-sudo cp dntpd.service /etc/systemd/system/
+sudo cp systemd/dntpd.service /etc/systemd/system/
 sudo systemctl enable --now dntpd
 ```
 
