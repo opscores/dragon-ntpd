@@ -1,28 +1,57 @@
-CC ?= cc
+# ============================================
+# Build Configuration
+# ============================================
 
+CC ?= cc
 TARGET := dntpd
+BUILD_TYPE ?= release
+
 SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c mode_handler.c
 HDR := network.h ntpd.h ntp_packet.h threads.h socket.h time_sync.h filter.h config.h mode_handler.h ido.h
 
+# Base flags
 CSTD := -std=c11
-
 WARN := -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wformat=2 -Wundef
-
 BASE_CFLAGS := $(CSTD) $(WARN)
 BASE_LDFLAGS :=
 LDLIBS := -lm -lpthread
+
+# Security flags (only for release)
+SECURITY_CFLAGS := -fstack-protector-strong -fPIE -D_FORTIFY_SOURCE=2
+SECURITY_LDFLAGS := -Wl,-z,relro,-z,now
+
+# Debug flags
+DEBUG_CFLAGS := -g -O0
+
+# Release flags
+RELEASE_CFLAGS := -O2 -DNDEBUG
+
+# ============================================
+# Build type selection
+# ============================================
+
+# Set CFLAGS and LDFLAGS based on BUILD_TYPE
+ifeq ($(BUILD_TYPE),debug)
+    CFLAGS := $(BASE_CFLAGS) $(DEBUG_CFLAGS)
+    LDFLAGS := $(BASE_LDFLAGS)
+else
+    CFLAGS := $(BASE_CFLAGS) $(RELEASE_CFLAGS) $(SECURITY_CFLAGS)
+    LDFLAGS := $(BASE_LDFLAGS) $(SECURITY_LDFLAGS)
+endif
+
+# ============================================
+# Targets
+# ============================================
 
 .PHONY: all debug release asan ubsan clean tidy format check
 
 all: release
 
-debug: CFLAGS := $(BASE_CFLAGS) -O0 -g3
-debug: LDFLAGS := $(BASE_LDFLAGS)
-debug: $(TARGET)
+debug:
+	$(MAKE) BUILD_TYPE=debug $(TARGET)
 
-release: CFLAGS := $(BASE_CFLAGS) -O2 -DNDEBUG
-release: LDFLAGS := $(BASE_LDFLAGS)
-release: $(TARGET)
+release:
+	$(MAKE) BUILD_TYPE=release $(TARGET)
 
 asan: CFLAGS := $(BASE_CFLAGS) -O1 -g3 -fsanitize=address -fno-omit-frame-pointer
 asan: LDFLAGS := $(BASE_LDFLAGS) -fsanitize=address
