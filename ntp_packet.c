@@ -1,15 +1,16 @@
 #include "ido.h"
 #include "ntpd.h"
 
-uint32_t read_u32be(const uint8_t* p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+uint32_t read_u32be(const uint8_t *p) {
+  return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+         ((uint32_t)p[2] << 8) | (uint32_t)p[3];
 }
 
-void write_u32be(uint8_t* p, uint32_t v) {
-    p[0] = (uint8_t)(v >> 24);
-    p[1] = (uint8_t)(v >> 16);
-    p[2] = (uint8_t)(v >> 8);
-    p[3] = (uint8_t)(v);
+void write_u32be(uint8_t *p, uint32_t v) {
+  p[0] = (uint8_t)(v >> 24);
+  p[1] = (uint8_t)(v >> 16);
+  p[2] = (uint8_t)(v >> 8);
+  p[3] = (uint8_t)(v);
 }
 
 /**
@@ -57,25 +58,26 @@ void write_u32be(uint8_t* p, uint32_t v) {
  * @return 0 on valid, -1 on error
  */
 static int validate_extension_field_length(uint16_t length, size_t remaining) {
-    /* RFC 5905: Length field bottom 2 bits should be zero (4-byte alignment) */
-    if (length & 0x03) {
-        syslog(LOG_WARNING, "Extension field length not aligned to 4 bytes: %u", length);
-        return -1;
-    }
+  /* RFC 5905: Length field bottom 2 bits should be zero (4-byte alignment) */
+  if (length & 0x03) {
+    syslog(LOG_WARNING, "Extension field length not aligned to 4 bytes: %u",
+           length);
+    return -1;
+  }
 
-    /* Check maximum size (65,532 octets due to 16-bit Length field) */
-    if (length > 65532) {
-        syslog(LOG_WARNING, "Extension field length exceeds maximum: %u", length);
-        return -1;
-    }
+  /* Check maximum size (65,532 octets due to 16-bit Length field) */
+  if (length > 65532) {
+    syslog(LOG_WARNING, "Extension field length exceeds maximum: %u", length);
+    return -1;
+  }
 
-    /* Check bounds */
-    if ((size_t)(48 + length) > remaining) {
-        syslog(LOG_WARNING, "Extension field exceeds packet bounds");
-        return -1;
-    }
+  /* Check bounds */
+  if ((size_t)(48 + length) > remaining) {
+    syslog(LOG_WARNING, "Extension field exceeds packet bounds");
+    return -1;
+  }
 
-    return 0;
+  return 0;
 }
 
 /**
@@ -101,21 +103,24 @@ static int validate_extension_field_length(uint16_t length, size_t remaining) {
  *
  * Return: 0 on success, -1 on error
  */
-static int parse_extension_field_header(const uint8_t* data, size_t pos, uint16_t* type, uint16_t* length) {
-    if (pos + 4 > 48) { return -1; /* Extension fields only in bytes 48+ */ }
+static int parse_extension_field_header(const uint8_t *data, size_t pos,
+                                        uint16_t *type, uint16_t *length) {
+  if (pos + 4 > 48) {
+    return -1; /* Extension fields only in bytes 48+ */
+  }
 
-    uint8_t high = data[pos];
-    uint8_t low = data[pos + 1];
+  uint8_t high = data[pos];
+  uint8_t low = data[pos + 1];
 
-    /* Type (high byte) */
-    uint16_t field_type = (uint16_t)((high << 8) | low);
-    /* Length (bytes 2-3) */
-    uint16_t field_len = (uint16_t)((data[pos + 2] << 8) | data[pos + 3]);
+  /* Type (high byte) */
+  uint16_t field_type = (uint16_t)((high << 8) | low);
+  /* Length (bytes 2-3) */
+  uint16_t field_len = (uint16_t)((data[pos + 2] << 8) | data[pos + 3]);
 
-    *type = field_type;
-    *length = field_len;
+  *type = field_type;
+  *length = field_len;
 
-    return 0;
+  return 0;
 }
 
 /**
@@ -124,9 +129,10 @@ static int parse_extension_field_header(const uint8_t* data, size_t pos, uint16_
  * @param data Pointer to field data
  * @param len Field length
  */
-static void process_nts_uid(const uint8_t* data __attribute__((unused)), size_t len __attribute__((unused))) {
-    syslog(LOG_DEBUG, "Processing NTS Unique Identifier field");
-    /* RFC 8915: Store UID for future authentication */
+static void process_nts_uid(const uint8_t *data __attribute__((unused)),
+                            size_t len __attribute__((unused))) {
+  syslog(LOG_DEBUG, "Processing NTS Unique Identifier field");
+  /* RFC 8915: Store UID for future authentication */
 }
 
 /**
@@ -135,9 +141,10 @@ static void process_nts_uid(const uint8_t* data __attribute__((unused)), size_t 
  * @param data Pointer to field data
  * @param len Field length
  */
-static void process_nts_cookie(const uint8_t* data __attribute__((unused)), size_t len __attribute__((unused))) {
-    syslog(LOG_DEBUG, "Processing NTS Cookie field");
-    /* RFC 8915: Store cookie for authentication */
+static void process_nts_cookie(const uint8_t *data __attribute__((unused)),
+                               size_t len __attribute__((unused))) {
+  syslog(LOG_DEBUG, "Processing NTS Cookie field");
+  /* RFC 8915: Store cookie for authentication */
 }
 
 /**
@@ -146,9 +153,10 @@ static void process_nts_cookie(const uint8_t* data __attribute__((unused)), size
  * @param data Pointer to field data
  * @param len Field length
  */
-static void process_nts_aeef(const uint8_t* data __attribute__((unused)), size_t len __attribute__((unused))) {
-    syslog(LOG_DEBUG, "Processing NTS AEEF field");
-    /* RFC 8915: Process authenticated extension field */
+static void process_nts_aeef(const uint8_t *data __attribute__((unused)),
+                             size_t len __attribute__((unused))) {
+  syslog(LOG_DEBUG, "Processing NTS AEEF field");
+  /* RFC 8915: Process authenticated extension field */
 }
 
 /**
@@ -159,32 +167,57 @@ static void process_nts_aeef(const uint8_t* data __attribute__((unused)), size_t
  * @param pos Position in packet
  */
 static void log_extension_field(uint16_t type, uint16_t length, size_t pos) {
-    const char* type_str = "Unknown";
+  const char *type_str = "Unknown";
 
-    switch (type) {
-    case NTP_EF_CRYPTO_NAK: type_str = "Crypto-NAK (Authentication Failure)"; break;
-    case NTP_EF_MAC: type_str = "Legacy MAC"; break;
-    case NTP_EF_I_DO_OFFER: type_str = "I-DO Offer"; break;
-    case NTP_EF_I_DO_RESPONSE: type_str = "I-DO Response"; break;
-    case NTP_EF_LAST_EF: type_str = "LAST-EF (End of Extension Fields)"; break;
-    case NTP_EF_CHECKSUM_COMP: type_str = "Checksum Complement"; break;
-    case NTP_EF_NTS_UID_REQ: type_str = "NTS Unique Identifier Request"; break;
-    case NTP_EF_NTS_UID_RESP: type_str = "NTS Unique Identifier Response"; break;
-    case NTP_EF_NTS_COOKIE: type_str = "NTS Cookie"; break;
-    case NTP_EF_NTS_COOKIE_PH: type_str = "NTS Cookie Placeholder"; break;
-    case NTP_EF_NTS_AEEF_REQ: type_str = "NTS AEEF Request"; break;
-    case NTP_EF_NTS_AEEF_RESP: type_str = "NTS AEEF Response"; break;
-    default:
-        /* Check for Kiss-o'-Death marker (RFC 5905 Section 8.3) */
-        if (type == 0 && length == 2) {
-            type_str = "Kiss-o'-Death (KOD)";
-        } else {
-            type_str = "Unknown";
-        }
-        break;
+  switch (type) {
+  case NTP_EF_CRYPTO_NAK:
+    type_str = "Crypto-NAK (Authentication Failure)";
+    break;
+  case NTP_EF_MAC:
+    type_str = "Legacy MAC";
+    break;
+  case NTP_EF_I_DO_OFFER:
+    type_str = "I-DO Offer";
+    break;
+  case NTP_EF_I_DO_RESPONSE:
+    type_str = "I-DO Response";
+    break;
+  case NTP_EF_LAST_EF:
+    type_str = "LAST-EF (End of Extension Fields)";
+    break;
+  case NTP_EF_CHECKSUM_COMP:
+    type_str = "Checksum Complement";
+    break;
+  case NTP_EF_NTS_UID_REQ:
+    type_str = "NTS Unique Identifier Request";
+    break;
+  case NTP_EF_NTS_UID_RESP:
+    type_str = "NTS Unique Identifier Response";
+    break;
+  case NTP_EF_NTS_COOKIE:
+    type_str = "NTS Cookie";
+    break;
+  case NTP_EF_NTS_COOKIE_PH:
+    type_str = "NTS Cookie Placeholder";
+    break;
+  case NTP_EF_NTS_AEEF_REQ:
+    type_str = "NTS AEEF Request";
+    break;
+  case NTP_EF_NTS_AEEF_RESP:
+    type_str = "NTS AEEF Response";
+    break;
+  default:
+    /* Check for Kiss-o'-Death marker (RFC 5905 Section 8.3) */
+    if (type == 0 && length == 2) {
+      type_str = "Kiss-o'-Death (KOD)";
+    } else {
+      type_str = "Unknown";
     }
+    break;
+  }
 
-    syslog(LOG_DEBUG, "Extension field: type=0x%04X (%s), len=%u, pos=%zu", type, type_str, length, pos);
+  syslog(LOG_DEBUG, "Extension field: type=0x%04X (%s), len=%u, pos=%zu", type,
+         type_str, length, pos);
 }
 
 /**
@@ -201,123 +234,142 @@ static void log_extension_field(uint16_t type, uint16_t length, size_t pos) {
  * @param size Total packet size
  * @return Number of bytes skipped (extension fields), or 0 if none
  */
-static int skip_extension_fields(const uint8_t* data, size_t size) {
-    if (size <= 48) return 0;
+static int skip_extension_fields(const uint8_t *data, size_t size) {
+  if (size <= 48)
+    return 0;
 
-    size_t pos = 48;
-    int skipped = 0;
+  size_t pos = 48;
+  int skipped = 0;
 
-    while (pos + 4 <= size) {
-        uint16_t field_type;
-        uint16_t field_len;
+  while (pos + 4 <= size) {
+    uint16_t field_type;
+    uint16_t field_len;
 
-        int ret = parse_extension_field_header(data, pos, &field_type, &field_len);
-        if (ret < 0) break;
+    int ret = parse_extension_field_header(data, pos, &field_type, &field_len);
+    if (ret < 0)
+      break;
 
-        /* Validate extension field length (RFC 5905) */
-        ret = validate_extension_field_length(field_len, size - 48);
-        if (ret < 0) {
-            syslog(LOG_WARNING, "Invalid extension field length at offset %zu", pos);
-            break;
-        }
-
-        /* LAST-EF marker: no more extension fields follow */
-        if (field_type == NTP_EF_LAST_EF) {
-            syslog(LOG_DEBUG, "LAST-EF marker detected at offset %zu", pos);
-            break;
-        }
-
-        /* Kiss-o'-Death marker (RFC 5905 Section 8.3) */
-        /* Type=0, Length=2 indicates Crypto-NAK/authentication failure */
-        if (field_type == 0 && field_len == 2) {
-            syslog(LOG_INFO, "Kiss-o'-Death (KOD) marker detected at offset %zu", pos);
-            return (int)(pos + field_len - 48);
-        }
-
-        /* I-DO extension fields (RFC 5905 Section 8.4) */
-        if (field_type == NTP_EF_I_DO_OFFER || field_type == NTP_EF_I_DO_RESPONSE) {
-            syslog(LOG_DEBUG, "I-DO extension field detected at offset %zu", pos);
-
-            /* Initialize I-DO state if not initialized */
-            if (g_ido_state.ido_state == IDO_STATE_IDLE) { ido_state_init(&g_ido_state); }
-
-            /* Process I-DO Offer/Response */
-            if (field_type == NTP_EF_I_DO_OFFER) {
-                bool ret_offer = ido_process(&g_ido_state, NTP_EF_I_DO_OFFER, (uint8_t)(field_len - 4), NULL);
-                if (!ret_offer) { syslog(LOG_WARNING, "I-DO Offer processing failed"); }
-            } else if (field_type == NTP_EF_I_DO_RESPONSE) {
-                bool ret_response = ido_process(&g_ido_state, NTP_EF_I_DO_RESPONSE, (uint8_t)(field_len - 4), NULL);
-                if (!ret_response) { syslog(LOG_WARNING, "I-DO Response processing failed"); }
-            }
-
-            /* Update state machine */
-            uint8_t ret_state = ido_state_machine(&g_ido_state, IDO_STATE_IDLE);
-            (void)ret_state; /* Suppress unused variable warning */
-
-            /* Log I-DO state */
-            ido_log_state(&g_ido_state);
-
-            pos += field_len;
-            skipped += field_len;
-            continue;
-        }
-
-        /* NTS extension fields (RFC 8915) */
-        if (field_type >= NTP_EF_NTS_UID_REQ && field_type <= NTP_EF_NTS_AEEF_RESP) {
-            syslog(LOG_DEBUG, "NTS extension field detected at offset %zu", pos);
-
-            /* Process NTS UID Request/Response */
-            if (field_type == NTP_EF_NTS_UID_REQ || field_type == NTP_EF_NTS_UID_RESP) {
-                process_nts_uid(data + 4, field_len - 4);
-            }
-            /* Process NTS Cookie */
-            else if (field_type == NTP_EF_NTS_COOKIE) {
-                process_nts_cookie(data + 4, field_len - 4);
-            }
-            /* Process NTS AEEF */
-            else if (field_type == NTP_EF_NTS_AEEF_REQ || field_type == NTP_EF_NTS_AEEF_RESP) {
-                process_nts_aeef(data + 4, field_len - 4);
-            }
-
-            pos += field_len;
-            skipped += field_len;
-            continue;
-        }
-
-        /* Checksum Complement (RFC 5905) */
-        if (field_type == NTP_EF_CHECKSUM_COMP) {
-            syslog(LOG_DEBUG, "Checksum Complement extension field detected at offset %zu", pos);
-            pos += field_len;
-            skipped += field_len;
-            continue;
-        }
-
-        /* Legacy MAC (RFC 5905) */
-        if (field_type == NTP_EF_MAC) {
-            syslog(LOG_DEBUG, "Legacy MAC extension field detected at offset %zu", pos);
-            pos += field_len;
-            skipped += field_len;
-            continue;
-        }
-
-        /* Crypto-NAK (RFC 5905 Section 7.2) */
-        if (field_type == NTP_EF_CRYPTO_NAK) {
-            syslog(LOG_INFO, "Crypto-NAK extension field detected at offset %zu", pos);
-            return (int)(pos + field_len - 48);
-        }
-
-        /* Unknown extension field type - log and skip if valid length */
-        if (field_len >= 4 && pos + field_len <= size) {
-            log_extension_field(field_type, field_len, pos);
-            pos += field_len;
-            skipped += field_len;
-        } else {
-            syslog(LOG_WARNING, "Invalid extension field: type=0x%04X, len=%u at offset %zu", field_type, field_len, pos);
-            break;
-        }
+    /* Validate extension field length (RFC 5905) */
+    ret = validate_extension_field_length(field_len, size - 48);
+    if (ret < 0) {
+      syslog(LOG_WARNING, "Invalid extension field length at offset %zu", pos);
+      break;
     }
 
-    return (int)skipped;
+    /* LAST-EF marker: no more extension fields follow */
+    if (field_type == NTP_EF_LAST_EF) {
+      syslog(LOG_DEBUG, "LAST-EF marker detected at offset %zu", pos);
+      break;
+    }
+
+    /* Kiss-o'-Death marker (RFC 5905 Section 8.3) */
+    /* Type=0, Length=2 indicates Crypto-NAK/authentication failure */
+    if (field_type == 0 && field_len == 2) {
+      syslog(LOG_INFO, "Kiss-o'-Death (KOD) marker detected at offset %zu",
+             pos);
+      return (int)(pos + field_len - 48);
+    }
+
+    /* I-DO extension fields (RFC 5905 Section 8.4) */
+    if (field_type == NTP_EF_I_DO_OFFER || field_type == NTP_EF_I_DO_RESPONSE) {
+      syslog(LOG_DEBUG, "I-DO extension field detected at offset %zu", pos);
+
+      /* Initialize I-DO state if not initialized */
+      if (g_ido_state.ido_state == IDO_STATE_IDLE) {
+        ido_state_init(&g_ido_state);
+      }
+
+      /* Process I-DO Offer/Response */
+      if (field_type == NTP_EF_I_DO_OFFER) {
+        bool ret_offer = ido_process(&g_ido_state, NTP_EF_I_DO_OFFER,
+                                     (uint8_t)(field_len - 4), NULL);
+        if (!ret_offer) {
+          syslog(LOG_WARNING, "I-DO Offer processing failed");
+        }
+      } else if (field_type == NTP_EF_I_DO_RESPONSE) {
+        bool ret_response = ido_process(&g_ido_state, NTP_EF_I_DO_RESPONSE,
+                                        (uint8_t)(field_len - 4), NULL);
+        if (!ret_response) {
+          syslog(LOG_WARNING, "I-DO Response processing failed");
+        }
+      }
+
+      /* Update state machine */
+      uint8_t ret_state = ido_state_machine(&g_ido_state, IDO_STATE_IDLE);
+      (void)ret_state; /* Suppress unused variable warning */
+
+      /* Log I-DO state */
+      ido_log_state(&g_ido_state);
+
+      pos += field_len;
+      skipped += field_len;
+      continue;
+    }
+
+    /* NTS extension fields (RFC 8915) */
+    if (field_type >= NTP_EF_NTS_UID_REQ &&
+        field_type <= NTP_EF_NTS_AEEF_RESP) {
+      syslog(LOG_DEBUG, "NTS extension field detected at offset %zu", pos);
+
+      /* Process NTS UID Request/Response */
+      if (field_type == NTP_EF_NTS_UID_REQ ||
+          field_type == NTP_EF_NTS_UID_RESP) {
+        process_nts_uid(data + 4, field_len - 4);
+      }
+      /* Process NTS Cookie */
+      else if (field_type == NTP_EF_NTS_COOKIE) {
+        process_nts_cookie(data + 4, field_len - 4);
+      }
+      /* Process NTS AEEF */
+      else if (field_type == NTP_EF_NTS_AEEF_REQ ||
+               field_type == NTP_EF_NTS_AEEF_RESP) {
+        process_nts_aeef(data + 4, field_len - 4);
+      }
+
+      pos += field_len;
+      skipped += field_len;
+      continue;
+    }
+
+    /* Checksum Complement (RFC 5905) */
+    if (field_type == NTP_EF_CHECKSUM_COMP) {
+      syslog(LOG_DEBUG,
+             "Checksum Complement extension field detected at offset %zu", pos);
+      pos += field_len;
+      skipped += field_len;
+      continue;
+    }
+
+    /* Legacy MAC (RFC 5905) */
+    if (field_type == NTP_EF_MAC) {
+      syslog(LOG_DEBUG, "Legacy MAC extension field detected at offset %zu",
+             pos);
+      pos += field_len;
+      skipped += field_len;
+      continue;
+    }
+
+    /* Crypto-NAK (RFC 5905 Section 7.2) */
+    if (field_type == NTP_EF_CRYPTO_NAK) {
+      syslog(LOG_INFO, "Crypto-NAK extension field detected at offset %zu",
+             pos);
+      return (int)(pos + field_len - 48);
+    }
+
+    /* Unknown extension field type - log and skip if valid length */
+    if (field_len >= 4 && pos + field_len <= size) {
+      log_extension_field(field_type, field_len, pos);
+      pos += field_len;
+      skipped += field_len;
+    } else {
+      syslog(LOG_WARNING,
+             "Invalid extension field: type=0x%04X, len=%u at offset %zu",
+             field_type, field_len, pos);
+      break;
+    }
+  }
+
+  return (int)skipped;
 }
 
 /**
@@ -331,99 +383,106 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
  *
  * Return: true on success, false on error
  */
-bool parse_ntp_packet(const void* buffer, size_t size, NtpPacket* pkt) {
-    if (buffer == NULL || pkt == NULL) {
-        syslog(LOG_WARNING, "NULL указатель при парсинге пакета");
-        return false;
-    }
+bool parse_ntp_packet(const void *buffer, size_t size, NtpPacket *pkt) {
+  if (buffer == NULL || pkt == NULL) {
+    syslog(LOG_WARNING, "NULL указатель при парсинге пакета");
+    return false;
+  }
 
-    if (size < 48) {
-        syslog(LOG_WARNING, "Пакет слишком мал: %zu байт (минимум 48)", size);
-        return false;
-    }
+  if (size < 48) {
+    syslog(LOG_WARNING, "Пакет слишком мал: %zu байт (минимум 48)", size);
+    return false;
+  }
 
-    const uint8_t* data = (const uint8_t*)buffer;
-    int ext_len = skip_extension_fields(data, size);
-    if (ext_len > 0) { syslog(LOG_DEBUG, "Пропускаем extension fields: %d байт", ext_len); }
+  const uint8_t *data = (const uint8_t *)buffer;
+  int ext_len = skip_extension_fields(data, size);
+  if (ext_len > 0) {
+    syslog(LOG_DEBUG, "Пропускаем extension fields: %d байт", ext_len);
+  }
 
-    /* Check for KOD in header (RFC 5905 Section 8.3) */
-    if (ntp_is_kod(pkt)) {
-        syslog(LOG_WARNING, "Kiss-o'-Death marker detected in packet header");
-        return false;
-    }
+  /* Check for KOD in header (RFC 5905 Section 8.3) */
+  if (ntp_is_kod(pkt)) {
+    syslog(LOG_WARNING, "Kiss-o'-Death marker detected in packet header");
+    return false;
+  }
 
-    /* Парсинг только основных 48 байт, игнорируя extension fields */
-    pkt->li_vn_mode = data[0];
-    pkt->stratum = data[1];
-    pkt->poll = (int8_t)data[2];
-    pkt->precision = (int8_t)data[3];
-    pkt->root_delay = read_u32be(&data[4]);
-    pkt->root_disp = read_u32be(&data[8]);
-    pkt->ref_id = read_u32be(&data[12]);
+  /* Парсинг только основных 48 байт, игнорируя extension fields */
+  pkt->li_vn_mode = data[0];
+  pkt->stratum = data[1];
+  pkt->poll = (int8_t)data[2];
+  pkt->precision = (int8_t)data[3];
+  pkt->root_delay = read_u32be(&data[4]);
+  pkt->root_disp = read_u32be(&data[8]);
+  pkt->ref_id = read_u32be(&data[12]);
 
-    pkt->ref_ts.sec = read_u32be(&data[16]);
-    pkt->ref_ts.frac = read_u32be(&data[20]);
-    pkt->orig_ts.sec = read_u32be(&data[24]);
-    pkt->orig_ts.frac = read_u32be(&data[28]);
-    pkt->recv_ts.sec = read_u32be(&data[32]);
-    pkt->recv_ts.frac = read_u32be(&data[36]);
-    pkt->xmit_ts.sec = read_u32be(&data[40]);
-    pkt->xmit_ts.frac = read_u32be(&data[44]);
+  pkt->ref_ts.sec = read_u32be(&data[16]);
+  pkt->ref_ts.frac = read_u32be(&data[20]);
+  pkt->orig_ts.sec = read_u32be(&data[24]);
+  pkt->orig_ts.frac = read_u32be(&data[28]);
+  pkt->recv_ts.sec = read_u32be(&data[32]);
+  pkt->recv_ts.frac = read_u32be(&data[36]);
+  pkt->xmit_ts.sec = read_u32be(&data[40]);
+  pkt->xmit_ts.frac = read_u32be(&data[44]);
 
-    uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
-    uint8_t vn = (uint8_t)((pkt->li_vn_mode & NTP_VN_MASK) >> NTP_VN_SHIFT);
-    uint8_t mode = (uint8_t)(pkt->li_vn_mode & NTP_MODE_MASK);
+  uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
+  uint8_t vn = (uint8_t)((pkt->li_vn_mode & NTP_VN_MASK) >> NTP_VN_SHIFT);
+  uint8_t mode = (uint8_t)(pkt->li_vn_mode & NTP_MODE_MASK);
 
-    if (vn != NTP_VN_4) {
-        syslog(LOG_WARNING, "Неверная версия NTP: %u (ожидалось 4)", vn);
-        return false;
-    }
+  if (vn != NTP_VN_4) {
+    syslog(LOG_WARNING, "Неверная версия NTP: %u (ожидалось 4)", vn);
+    return false;
+  }
 
-    if (mode == 0 || mode > 7) {
-        syslog(LOG_WARNING, "Неверный mode NTP: %u", mode);
-        return false;
-    }
+  if (mode == 0 || mode > 7) {
+    syslog(LOG_WARNING, "Неверный mode NTP: %u", mode);
+    return false;
+  }
 
-    if (li > 3) {
-        syslog(LOG_WARNING, "Неверный Leap Indicator: %u", li);
-        return false;
-    }
+  if (li > 3) {
+    syslog(LOG_WARNING, "Неверный Leap Indicator: %u", li);
+    return false;
+  }
 
-    if (pkt->stratum > 16) {
-        syslog(LOG_WARNING, "Страта превышает допустимое значение: %u", pkt->stratum);
-        return false;
-    }
+  if (pkt->stratum > 16) {
+    syslog(LOG_WARNING, "Страта превышает допустимое значение: %u",
+           pkt->stratum);
+    return false;
+  }
 
-    return true;
+  return true;
 }
 
-void create_ntp_request(void* buffer, NtpTimestamp* xmit_out) {
-    if (buffer == NULL) {
-        syslog(LOG_WARNING, "NULL указатель при создании запроса");
-        return;
-    }
+void create_ntp_request(void *buffer, NtpTimestamp *xmit_out) {
+  if (buffer == NULL) {
+    syslog(LOG_WARNING, "NULL указатель при создании запроса");
+    return;
+  }
 
-    uint8_t* p = (uint8_t*)buffer;
-    memset(p, 0, 48);
+  uint8_t *p = (uint8_t *)buffer;
+  memset(p, 0, 48);
 
-    p[0] = (uint8_t)((0u << NTP_LI_SHIFT) | ((uint8_t)NTP_VN_4 << NTP_VN_SHIFT) | 3u);
-    p[1] = 0;
-    p[2] = (uint8_t)(g_local_poll < 0 ? 12 : g_local_poll);
-    p[3] = (uint8_t)g_local_precision;
+  p[0] = (uint8_t)((0u << NTP_LI_SHIFT) | ((uint8_t)NTP_VN_4 << NTP_VN_SHIFT) |
+                   3u);
+  p[1] = 0;
+  p[2] = (uint8_t)(g_local_poll < 0 ? 12 : g_local_poll);
+  p[3] = (uint8_t)g_local_precision;
 
-    NtpTimestamp t1 = ntp_timestamp_now();
-    write_u32be(&p[40], t1.sec);
-    write_u32be(&p[44], t1.frac);
-    if (xmit_out != NULL) { *xmit_out = t1; }
+  NtpTimestamp t1 = ntp_timestamp_now();
+  write_u32be(&p[40], t1.sec);
+  write_u32be(&p[44], t1.frac);
+  if (xmit_out != NULL) {
+    *xmit_out = t1;
+  }
 }
 
-bool ntp_is_kod(const NtpPacket* pkt) {
-    if (pkt == NULL) return false;
+bool ntp_is_kod(const NtpPacket *pkt) {
+  if (pkt == NULL)
+    return false;
 
-    /* RFC 5905 Section 8.3: KOD in header
-     * stratum=127 (0x7F) and leap=3 indicates KOD */
-    uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
-    return pkt->stratum == 127 && li == 3;
+  /* RFC 5905 Section 8.3: KOD in header
+   * stratum=127 (0x7F) and leap=3 indicates KOD */
+  uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
+  return pkt->stratum == 127 && li == 3;
 }
 
 #include "ntpd.h"
