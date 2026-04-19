@@ -72,6 +72,12 @@ NtpTimestamp ntp_timestamp_now(void) {
  * Return: 0 on success, -1 on error
  */
 int apply_time_correction_slew_or_step(int64_t offset_us) {
+    /* Check panic condition (RFC 5905 Section 11.3) */
+    if (check_panic_condition(offset_us)) {
+        syslog(LOG_WARNING, "Panic condition detected: time offset %lus exceeds threshold", offset_us / 1000);
+        return -1;
+    }
+
     if (offset_us > STEP_THRESHOLD_US || offset_us < -STEP_THRESHOLD_US) {
         struct timespec now_ts;
         if (clock_gettime(CLOCK_REALTIME, &now_ts) != 0) return -1;

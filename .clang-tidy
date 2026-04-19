@@ -1,0 +1,4 @@
+# Clang-Tidy configuration for ntpd
+# Disable unusedFunction warnings (functions are exported for API)
+
+Checks: -*, -*,+llvm-*,-llvm-unusedFunction,-llvm-unusedParameter,-llvm-unusedVariable,+clang-analyzer-*

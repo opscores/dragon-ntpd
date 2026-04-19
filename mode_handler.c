@@ -121,16 +121,34 @@ int mode_handler_init(void) {
 
 void mode_handler_cleanup(void) {
     pthread_mutex_lock(&g_mode_mutex);
+    
+    /* Log current ACL state before cleanup */
+    syslog(LOG_INFO, "Mode handler cleanup: ACL entries: %d", acl_get_entry_count());
+    
+    /* Clear ACL entries */
+    acl_clear_entries();
+    
+    /* Clear rate limit entries */
+    rate_limit_cleanup();
+    
     g_acl_entry_count = 0;
     g_rate_limit_entry_count = 0;
+    
     pthread_mutex_unlock(&g_mode_mutex);
+    
+    syslog(LOG_INFO, "Mode handler cleanup completed");
 }
 
 int mode_handler_set_config(const ModeConfig* config) {
     if (config == NULL) return -EINVAL;
 
     pthread_mutex_lock(&g_mode_mutex);
+    
+    /* Log current ACL state before config update */
+    syslog(LOG_INFO, "Mode handler config update: ACL entries: %d", acl_get_entry_count());
+    
     memcpy(&g_mode_config, config, sizeof(g_mode_config));
+    
     pthread_mutex_unlock(&g_mode_mutex);
 
     syslog(LOG_INFO, "Mode handler config updated");
@@ -497,6 +515,8 @@ int mode_handler_parse_config(const char* config_file) {
             if (errno == 0 && *endptr == '\0' && t > 0 && t <= 65535) g_mode_config.panic_threshold = (uint16_t)t;
         } else if (strcmp(key, "acl_allow") == 0) {
             acl_add_entry(val, 0);
+        } else if (strcmp(key, "acl_remove") == 0) {
+            acl_remove_entry(val);
         }
     }
 

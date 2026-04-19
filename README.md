@@ -43,7 +43,25 @@ pool.ntp.org:123
 time.google.com:123
 ```
 
-## Command Line Options
+**Modes config file** (`/etc/dntpd/modes.conf`) - Security and access policies:
+
+```
+# ACL entries
+acl_allow 192.168.1.0/24 noquery,noserve
+acl_allow 10.0.0.0/8 noquery,noserve
+
+# Mode handler configuration
+enable_control_messages false
+enable_symmetric_mode true
+enable_broadcast false
+drop_unauthenticated_control true
+enable_ntp_auth false
+acl_default_policy noquery,noserve,limited
+rate_limit_interval 2
+max_response_ratio 1.0
+initial_stratum 16
+panic_threshold 1000
+```
 
 | Option | Description |
 |--------|-------------|
@@ -142,9 +160,8 @@ dntpd/
 
 GitHub Actions running:
 - Build (gcc + clang)
-- Static analysis (CodeQL, clang-tidy)
 - Code formatting check (LLVM style)
-- Cross-compilation (ARM, i686)
+- Pre-commit hooks
 - Security analysis
 
 ## Code Style

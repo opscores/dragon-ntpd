@@ -108,7 +108,7 @@ Display help message and exit
 .BI \-v
 Display version information and exit
 .SH CONFIGURATION FILE FORMAT
-The configuration file should contain one NTP server per line:
+The main configuration file should contain one NTP server per line:
 .IP
 \fIserver_name\fR:\fIport\fR
 .PP
@@ -134,6 +134,48 @@ Supported formats:
 \fIserver_name\fR minpoll 6 \- Set minimum poll interval (2^6 = 64 seconds)
 .IP
 \fIserver_name\fR maxpoll 10 \- Set maximum poll interval (2^10 = 1024 seconds)
+
+.SH MODES CONFIGURATION FILE
+The modes configuration file (\fI/etc/dntpd/modes.conf\fR) controls security and access policies:
+.PP
+Supported options:
+.IP
+\fIenable_control_messages\fR \- Enable/disable control messages (true/false)
+.IP
+\fIenable_symmetric_mode\fR \- Enable/disable symmetric mode (true/false)
+.IP
+\fIenable_broadcast\fR \- Enable/disable broadcast mode (true/false)
+.IP
+\fIdrop_unauthenticated_control\fR \- Drop unauthenticated control messages (true/false)
+.IP
+\fIenable_ntp_auth\fR \- Enable NTP authentication (true/false)
+.IP
+\fIacl_default_policy\fR \- Default ACL policy (comma-separated flags)
+.RS
+.IP \- noquery \- Disable query responses
+.IP \- noserve \- Disable time service
+.IP \- limited \- Rate limit requests
+.IP \- nopeer \- Disable peer mode
+.IP \- notrust \- Mark as untrusted
+.RE
+.IP
+\fIrate_limit_interval\fR \- Rate limit interval in seconds (default: 2)
+.IP
+\fImax_response_ratio\fR \- Maximum response ratio (default: 1.0)
+.IP
+\fIinitial_stratum\fR \- Initial stratum level (default: 16)
+.IP
+\fIpanic_threshold\fR \- Panic threshold in microseconds (default: 1000)
+.IP
+\fIacl_allow\fR \- Add ACL entry: \fI<network> [flags]\fR
+.RS
+.IP \- 192.168.1.0/24 noquery,noserve \- Allow 192.168.1.0/24 with noquery,noserve flags
+.RE
+.IP
+\fIacl_remove\fR \- Remove ACL entry: \fI<network>\fR
+.RS
+.IP \- acl_remove 192.168.1.100 \- Remove ACL entry for 192.168.1.100
+.RE
 .SH NTP PACKET FORMAT
 The NTP protocol uses a 48-byte packet format (plus optional extension fields):
 .IP
