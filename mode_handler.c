@@ -16,7 +16,7 @@
 
 static ModeConfig g_mode_config = {
     .enable_control_messages = 0,
-    .enable_symmetric_mode = 0,
+    .enable_symmetric_mode = 1,
     .enable_broadcast = 0,
     .drop_unauthenticated_control = 1,
     .enable_ntp_auth = DEFAULT_ENABLE_NTP_AUTH,

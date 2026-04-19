@@ -184,6 +184,121 @@ uint8_t compute_system_offset(int64_t *offsets, int count, int *best_idx) {
     return (uint8_t)(median & 0xFF);
 }
 
+#define FALSETICKER_THRESHOLD_US 250000
+#define MAX_PEERS 8
+
+static int64_t abs64(int64_t v) {
+    return v < 0 ? -v : v;
+}
+
+static int compare_int64(const void *a, const void *b) {
+    int64_t va = *(const int64_t *)a;
+    int64_t vb = *(const int64_t *)b;
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+    return 0;
+}
+
+/**
+ * select_best_peers - Select valid peers using Byzantine fault detection
+ * @offsets: Array of peer offsets in microseconds
+ * @jitter: Array of peer jitter in microseconds
+ * @count: Number of peers
+ * @valid_indices: Output array of valid peer indices
+ * @valid_count: Output count of valid peers
+ *
+ * RFC 5905 Section 11.2.1: Selection Algorithm
+ * Filters out falsetickers using median and cluster analysis.
+ *
+ * Return: 0 on success, -1 on error
+ */
+int select_best_peers(const int64_t *offsets, const uint64_t *jitter, int count,
+                   int *valid_indices, int *valid_count) {
+    if (count < 1 || offsets == NULL || valid_indices == NULL || valid_count == NULL) {
+        if (valid_count) *valid_count = 0;
+        return -1;
+    }
+    if (count > MAX_PEERS) {
+        count = MAX_PEERS;
+    }
+    int64_t sorted[MAX_PEERS];
+    for (int i = 0; i < count; i++) {
+        sorted[i] = offsets[i];
+    }
+    qsort(sorted, (size_t)count, sizeof(int64_t), compare_int64);
+    int64_t median = sorted[count / 2];
+    int valid = 0;
+    for (int i = 0; i < count; i++) {
+        if (abs64(offsets[i] - median) < FALSETICKER_THRESHOLD_US) {
+            valid_indices[valid] = i;
+            valid++;
+        }
+    }
+    *valid_count = valid;
+    return 0;
+}
+
+/**
+ * majority_vote - Determine majority offset from peer offsets
+ * @offsets: Array of peer offsets in microseconds
+ * @count: Number of offsets
+ *
+ * RFC 5905 Section 11.2.1: Selection Algorithm
+ * Returns the offset value that appears in >50% of peers.
+ *
+ * Return: Majority offset in microseconds, or median if no majority
+ */
+int64_t majority_vote(const int64_t *offsets, int count) {
+    if (count < 1 || offsets == NULL) {
+        return 0;
+    }
+    if (count == 1) {
+        return offsets[0];
+    }
+    if (count < 3) {
+        int64_t sorted[2];
+        sorted[0] = offsets[0];
+        sorted[1] = offsets[1];
+        return sorted[0] == sorted[1] ? sorted[0] : (sorted[0] + sorted[1]) / 2;
+    }
+    int64_t sorted[MAX_PEERS];
+    for (int i = 0; i < count && i < MAX_PEERS; i++) {
+        sorted[i] = offsets[i];
+    }
+    qsort(sorted, (size_t)count, sizeof(int64_t), compare_int64);
+    int64_t median = sorted[count / 2];
+    int match_count = 0;
+    int64_t match_value = 0;
+    for (int i = 0; i < count; i++) {
+        if (abs64(offsets[i] - median) < FALSETICKER_THRESHOLD_US) {
+            match_count++;
+            match_value = offsets[i];
+        }
+    }
+    if (match_count > count / 2) {
+        return match_value;
+    }
+    return median;
+}
+
+/**
+ * is_false_ticker - Check if peer is a falseticker
+ * @peer_offset: Offset of peer to check
+ * @cluster_offset: Reference cluster offset in microseconds
+ *
+ * RFC 5905 Section 11.2.1: falseticker detection
+ * A peer is considered falseticker if offset differs from
+ * cluster median by more than 250ms.
+ *
+ * Return: true if falseticker, false otherwise
+ */
+bool is_false_ticker(int64_t peer_offset, int64_t cluster_offset) {
+    if (abs64(peer_offset - cluster_offset) > FALSETICKER_THRESHOLD_US) {
+        return true;
+    }
+    return false;
+}
+
 /**
  * ntp_u16_16_from_us - Convert microseconds to NTP u16.16 fixed-point
  * @us: Microseconds value
