@@ -1,6 +1,8 @@
 #include "ntpd.h"
 #include "mode_handler.h"
 #include "network.h"
+#include "network4.h"
+#include "network6.h"
 #include <stdlib.h>
 #include <sys/select.h>
 
@@ -13,86 +15,52 @@ int get_sync_socket(void)
 	if (g_sync_sock >= 0)
 		return g_sync_sock;
 
-	int family = (g_cli.family_preference == 2) ? AF_INET6 : AF_INET;
+	if (g_cli.family_preference == 2) {
+		g_sync_sock = network6_create_socket(NTP_PORT);
+	} else {
+		g_sync_sock = network4_create_socket(NTP_PORT);
+	}
 
-	g_sync_sock = socket(family, SOCK_DGRAM, 0);
 	if (g_sync_sock < 0) {
 		syslog(LOG_ERR, "Не удалось создать сокет синхронизации: %s", strerror(errno));
 		return -1;
 	}
 
-	int reuse = 1;
-	setsockopt(g_sync_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+	network4_enable_reuseaddr(g_sync_sock);
 
 	return g_sync_sock;
 }
 
 int create_udp_socket(int port)
 {
-	int family = (g_cli.family_preference == 2) ? AF_INET6 : AF_INET;
+	if (port <= 0 || port > 65535) {
+		syslog(LOG_ERR, "Неверный порт для bind: %d", port);
+		return -1;
+	}
 
-	int sock = socket(family, SOCK_DGRAM, 0);
+	int sock;
+	if (g_cli.family_preference == 2) {
+		sock = network6_create_socket((uint16_t)port);
+	} else {
+		sock = network4_create_socket((uint16_t)port);
+	}
+
 	if (sock < 0) {
 		syslog(LOG_ERR, "Ошибка создания сокета: %s", strerror(errno));
 		return -1;
 	}
 
-	if (port <= 0 || port > 65535) {
-		syslog(LOG_ERR, "Неверный порт для bind: %d", port);
-		close_socket(sock);
-		return -1;
+	int ret;
+	if (g_cli.family_preference == 2) {
+		ret = network6_bind_socket(sock, g_cli.interface, (uint16_t)port);
+	} else {
+		ret = network4_bind_socket(sock, g_cli.interface, (uint16_t)port);
 	}
 
-	if (family == AF_INET6) {
-		struct sockaddr_in6 addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sin6_family = AF_INET6;
-		addr.sin6_port = htons((uint16_t)port);
-		addr.sin6_addr = in6addr_any;
-
-		if (g_cli.interface != NULL) {
-			unsigned int ifindex = if_nametoindex(g_cli.interface);
-			if (ifindex > 0) {
-				addr.sin6_scope_id = ifindex;
-				syslog(LOG_INFO, "Привязка к интерфейсу %s (IPv6)", g_cli.interface);
-			}
-		}
-
-		if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-			syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
-			close_socket(sock);
-			return -1;
-		}
-	} else {
-		struct sockaddr_in addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sin_family = AF_INET;
-		addr.sin_port = htons((uint16_t)port);
-
-		if (g_cli.interface != NULL) {
-			struct ifreq ifr;
-			memset(&ifr, 0, sizeof(ifr));
-			snprintf(ifr.ifr_name, IFNAMSZ, "%s", g_cli.interface);
-
-			if (ioctl(sock, SIOCGIFADDR, &ifr) == 0) {
-				struct sockaddr_in *ifa_addr = (struct sockaddr_in *)&ifr.ifr_addr;
-				addr.sin_addr = ifa_addr->sin_addr;
-				syslog(LOG_INFO, "Привязка к интерфейсу %s: %s",
-				     g_cli.interface, inet_ntoa(addr.sin_addr));
-			} else {
-				syslog(LOG_WARNING, "Не удалось получить адрес интерфейса %s: %s",
-				      g_cli.interface, strerror(errno));
-				addr.sin_addr.s_addr = INADDR_ANY;
-			}
-		} else {
-			addr.sin_addr.s_addr = INADDR_ANY;
-		}
-
-		if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-			syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
-			close_socket(sock);
-			return -1;
-		}
+	if (ret < 0) {
+		syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
+		close_socket(sock);
+		return -1;
 	}
 
 	return sock;
@@ -116,24 +84,15 @@ void close_socket(int sock) {
 }
 
 int create_tcp_socket(int port) {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    int sock = network4_create_socket(NTP_PORT);
     if (sock < 0) {
         syslog(LOG_ERR, "Ошибка создания TCP сокета: %s", strerror(errno));
         return -1;
     }
 
-    int reuse = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        syslog(LOG_WARNING, "Не удалось установить SO_REUSEADDR: %s", strerror(errno));
-    }
+    network4_enable_reuseaddr(sock);
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    if (network4_bind_to_port(sock, (uint16_t)port) < 0) {
         syslog(LOG_ERR, "Ошибка привязки TCP сокета: %s", strerror(errno));
         close(sock);
         return -1;
@@ -333,7 +292,6 @@ static void *handle_peer_request_thread(void *arg) {
 
     struct sockaddr_in client_addr;
     memset(&client_addr, 0, sizeof(client_addr));
-    client_addr.sin_family = AF_INET;
 
     errno = 0;
     char *endp = NULL;
@@ -344,28 +302,25 @@ static void *handle_peer_request_thread(void *arg) {
         return NULL;
     }
 
-    client_addr.sin_port = htons((uint16_t)port_ul);
-
-    if (inet_pton(AF_INET, ip, &client_addr.sin_addr) <= 0) {
+    if (network4_parse_address(ip, (uint16_t)port_ul, &client_addr) < 0) {
         syslog(LOG_WARNING, "Невалидный IP от %s:%s", ip, port);
         return NULL;
     }
 
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    int sock = network4_create_socket(0);
     if (sock < 0) {
         syslog(LOG_WARNING, "Ошибка создания сокетa: %s", strerror(errno));
         return NULL;
     }
 
-    if (sendto(sock, response, sizeof(response), 0,
-                (struct sockaddr *)&client_addr, sizeof(client_addr)) < 0) {
+    if (network4_sendto(sock, response, sizeof(response), &client_addr) < 0) {
         syslog(LOG_WARNING, "Ошибка отправки ответа клиенту: %s",
                 strerror(errno));
-        close(sock);
+        network4_close_socket(sock);
         return NULL;
     }
 
-    close(sock);
+    network4_close_socket(sock);
 
     rate_limit_update(ip);
 
@@ -534,7 +489,7 @@ static void *tcp_accept_thread(void *arg) {
         }
 
         char client_ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+        network4_format_address(&client_addr, client_ip, sizeof(client_ip));
         syslog(LOG_DEBUG, "ntpq подключение от %s:%d", client_ip, ntohs(client_addr.sin_port));
 
         handle_ntpq_request(client_fd);
