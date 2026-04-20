@@ -265,7 +265,7 @@ int start_ntpq_thread(void);
 int start_clock_thread(int interval_sec);
 void stop_clock_thread(void);
 void cleanup_clock_thread(void);
-int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* peer_state);
+int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* peer_state, int idx);
 void stop_peer_thread(void);
 void cleanup_peer_thread(void);
 

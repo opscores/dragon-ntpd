@@ -3,6 +3,7 @@
 #include "network4.h"
 #include "network6.h"
 #include "ntpd.h"
+#include "threads.h"
 #include <stdlib.h>
 #include <sys/select.h>
 
@@ -472,6 +473,11 @@ static void handle_ntpq_request(int client_fd) {
         uint32_t root_disp = g_local_root_disp;
         uint8_t local_li = g_local_li;
         pthread_mutex_unlock(&g_mutex);
+
+        // RFC 5905 Section 5: Clock monitoring functions
+        int64_t last_offset = clock_thread_get_last_offset();
+        int last_correction = clock_thread_get_last_correction();
+
         resp_len = snprintf(response, sizeof(response),
                             "system peer: LOCAL(0)\n"
                             "stratum: %u\n"
@@ -479,8 +485,11 @@ static void handle_ntpq_request(int client_fd) {
                             "precision: %d\n"
                             "root delay: %u ms\n"
                             "root dispersion: %u ms\n"
-                            "leap: %02x\n",
-                            stratum, (int)poll, (int)precision, ntohl(root_delay) >> 16, ntohl(root_disp) >> 16, local_li);
+                            "leap: %02x\n"
+                            "clock offset: %ld us\n"
+                            "correction: %s\n",
+                            stratum, (int)poll, (int)precision, ntohl(root_delay) >> 16, ntohl(root_disp) >> 16, local_li, (long)last_offset,
+                            last_correction == 1 ? "STEP" : (last_correction == 2 ? "SLEW" : "NONE"));
     } else if (strncmp(buffer, "quit", 4) == 0) {
         resp_len = snprintf(response, sizeof(response), "OK\r\n");
         send(client_fd, response, (size_t)resp_len, 0);

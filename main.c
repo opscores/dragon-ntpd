@@ -5,6 +5,10 @@ int g_server_count = 0;
 NtpSample g_samples[MAX_SAMPLES];
 int g_sample_count = 0;
 
+/* RFC 5905 Section 11.2.1: Multi-server integration - peer pool for Byzantine fault detection */
+PeerState g_peer_pool[MAX_PEERS];
+int g_peer_pool_count = 0;
+
 bool g_time_synced = false;
 static volatile sig_atomic_t g_shutdown_requested = 0;
 uint8_t g_local_stratum = 16;
@@ -186,6 +190,26 @@ int load_server_config(void) {
 
         g_server_count++;
         syslog(LOG_INFO, "Конфигурация загружена: %s:%s", ip_str, port_str);
+
+        /* RFC 5905 Section 11.2.1: Initialize peer pool for Byzantine fault detection */
+        pthread_mutex_lock(&g_mutex);
+        if (g_peer_pool_count < MAX_PEERS) {
+            /* CERT C 3.4.5: Use snprintf for bounds-safe string copy */
+            snprintf(g_peer_pool[g_peer_pool_count].ip, sizeof(g_peer_pool[g_peer_pool_count].ip), "%s", ip_str);
+            snprintf(g_peer_pool[g_peer_pool_count].port, sizeof(g_peer_pool[g_peer_pool_count].port), "%s", port_str);
+            g_peer_pool[g_peer_pool_count].stratum = 16; /* Unsynchronized */
+            g_peer_pool[g_peer_pool_count].delay_us = 0;
+            g_peer_pool[g_peer_pool_count].offset_us = 0;
+            g_peer_pool[g_peer_pool_count].jitter_us = 0;
+            g_peer_pool[g_peer_pool_count].root_disp = 0;
+            g_peer_pool[g_peer_pool_count].last_update = 0;
+            g_peer_pool[g_peer_pool_count].reachable = false;
+            g_peer_pool_count++;
+            syslog(LOG_DEBUG, "Peer pool initialized: %s:%s (count=%d)", ip_str, port_str, g_peer_pool_count);
+        } else {
+            syslog(LOG_WARNING, "Peer pool full (max=%d), skipping: %s:%s", MAX_PEERS, ip_str, port_str);
+        }
+        pthread_mutex_unlock(&g_mutex);
     }
 
     fclose(fp);
@@ -320,7 +344,8 @@ int main(int argc, char* argv[]) {
     /* Запуск потока обработки пэеров (RFC 5905 Section 5) */
     int peer_sock = create_udp_socket(NTP_PORT);
     if (peer_sock >= 0) {
-        if (start_peer_thread(peer_sock, "0.0.0.0", "123", NULL) != 0) {
+        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer pool */
+        if (start_peer_thread(peer_sock, "0.0.0.0", "123", NULL, 0) != 0) {
             syslog(LOG_CRIT, "Не удалось запустить поток обработки пэеров");
             close_socket(peer_sock);
         } else {

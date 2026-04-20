@@ -357,6 +357,19 @@ int sync_ntp_time(const char* ip, const char* port) {
     ssize_t recv_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&from_addr, &from_len);
 
     if (recv_len > 0) {
+        /* RFC 5905 Section 11.2.1: Multi-server integration - process all peers in pool */
+        /* Update peer pool state with received packet */
+        pthread_mutex_lock(&g_mutex);
+        for (int i = 0; i < g_peer_pool_count; i++) {
+            if (strncmp(g_peer_pool[i].ip, ip, sizeof(g_peer_pool[i].ip) - 1) == 0 &&
+                strncmp(g_peer_pool[i].port, port, sizeof(g_peer_pool[i].port) - 1) == 0) {
+                g_peer_pool[i].reachable = true;
+                g_peer_pool[i].last_update = time(NULL);
+                break;
+            }
+        }
+        pthread_mutex_unlock(&g_mutex);
+
         NtpTimestamp t4 = ntp_timestamp_now();
         NtpPacket pkt;
         if (parse_ntp_packet(buffer, (size_t)recv_len, &pkt)) {
@@ -437,8 +450,6 @@ int sync_ntp_time(const char* ip, const char* port) {
                         return -1;
                     }
 
-                    g_local_poll = adjust_poll_interval(g_local_poll, g_peer_poll, delay_us, offset_us);
-
                     /* RFC 5905 Section 11.2.1: Calculate network quality for peer selection */
                     uint8_t network_quality = calculate_network_quality(delay_us);
                     syslog(LOG_DEBUG, "Network quality: %u%% (delay=%" PRIu64 " мкс)", network_quality, delay_us);
@@ -449,36 +460,39 @@ int sync_ntp_time(const char* ip, const char* port) {
                     (void)compute_system_offset(&offset_us, 1, &best_idx); /* Suppress unused variable warning */
                     syslog(LOG_DEBUG, "System offset computed (best_idx=%d)", best_idx);
 
-                    marx_add_sample_us((uint64_t)ntp_timestamp_to_ns(&t4), delay_us, offset_us);
+                    /* RFC 5905 Section 10: MARX filter for outlier detection */
+                    struct timeval tv_now;
+                    if (gettimeofday(&tv_now, NULL) == 0) {
+                        uint64_t now_ns = (uint64_t)tv_now.tv_sec * 1000000000ULL + (uint64_t)tv_now.tv_usec * 1000;
+                        marx_add_sample_us(now_ns, delay_us, offset_us);
+                    }
 
-                    pthread_mutex_lock(&g_mutex);
-                    g_sample_count = marx_filter_outliers(g_samples, g_sample_count, MARX_K);
-
-                    /* Get filtered offset from samples */
-                    int64_t filtered_offset = offset_us;
-                    if (g_sample_count > 0) { filtered_offset = g_samples[g_sample_count - 1].offset; }
-
-                    /* RFC 5905 Section 11.2.1: Use select_best_peers() for Byzantine fault detection */
-                    /* For single peer: peer is already valid, for pool: filter outliers */
-                    int valid_indices[MAX_PEERS];
-                    int valid_count = 0;
-                    select_best_peers(&offset_us, NULL, 1, valid_indices, &valid_count);
-                    syslog(LOG_DEBUG, "Valid peers after Byzantine fault detection: %d", valid_count);
+                    // Filter using MARX algorithm (RFC 5905 Section 10)
+                    int valid_count = marx_filter_outliers(g_samples, g_sample_count, 3);
+                    if (valid_count == 0) {
+                        syslog(LOG_WARNING, "MARX: No valid samples after filtering, skipping correction");
+                        pthread_mutex_lock(&g_mutex);
+                        g_time_synced = false;
+                        pthread_mutex_unlock(&g_mutex);
+                        close_socket(sock);
+                        return -1;
+                    }
+                    syslog(LOG_DEBUG, "Valid samples after MARX filtering: %d", valid_count);
 
                     /* Update poll interval under mutex */
                     g_local_poll = adjust_poll_interval(g_local_poll, pkt.poll, delay_us, offset_us);
 
                     pthread_mutex_unlock(&g_mutex);
 
-                    /* Apply correction only if we have valid samples */
-                    if (g_sample_count >= 1) {
-                        int apply_result = apply_time_correction_slew_or_step(filtered_offset);
+                    // Apply correction only if we have valid filtered samples
+                    if (valid_count >= 1) {
+                        int apply_result = apply_time_correction_slew_or_step(offset_us);
                         if (apply_result == 0) {
-                            syslog(LOG_DEBUG, "Коррекция применена: %" PRId64 " мкс", filtered_offset);
+                            syslog(LOG_DEBUG, "Коррекция применена: %" PRId64 " мкс", offset_us);
                         } else {
                             syslog(LOG_WARNING, "Ошибка применения коррекции: %s", strerror(errno));
                         }
-                        update_frequency_discipline(filtered_offset, g_local_poll);
+                        update_frequency_discipline(offset_us, g_local_poll);
                     } else {
                         syslog(LOG_DEBUG, "Пропуск коррекции: недостаточно выборок");
                     }
