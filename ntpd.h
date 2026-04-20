@@ -85,18 +85,21 @@
 /* Jitter thresholds (RFC 5905 Section 11.2.1) */
 #define JITTER_THRESHOLD_US 100000 /* 100ms - exclude high-jitter peers */
 
-/* RFC 5905 Section 11.3 - Clock Discipline */
+/* ============================================================================
+ * RFC 5905 Section 11.3 - Clock Discipline Algorithm Constants
+ * ============================================================================
+ */
+
+/* RFC 5905 Section 11.3 - Clock discipline constants */
 #define CLOCK_PHI 15e-6            /* Max frequency error (s/s) = 15 PPM */
 #define CLOCK_PLLGAIN 8            /* PLL loop gain (log2) */
 #define CLOCK_FLLGAIN 4            /* FLL loop gain (log2) */
-#define CLOCK_ALLAN_INTERCEPT 2048 /* Allan intercept (sec), poll >= 11 */
+#define CLOCK_ALLAN_INTERCEPT 1500 /* Allan intercept (sec), RFC 5905 default */
 #define FREQ_UPDATE_INTERVAL_MIN_SEC 64
-#define FREQ_FILE STATE_DIR "/frequency"
-#define FREQ_OFFSET_MAX_PPM 128.0 /* Max frequency offset (PPM) */
 
 /* RFC 5905 Section 11.3 - Loop filter constants */
-#define FLL_ALPHA 0.1                    /* FLL filter coefficient (0.1 = tau = 10x poll) */
-#define PLL_ALPHA 0.01                   /* PLL filter coefficient (0.01 = tau = 100x poll) */
+#define FLL_ALPHA 0.1                    /* FLL filter coefficient */
+#define PLL_ALPHA 0.01                   /* PLL filter coefficient */
 #define FREQ_DEADBAND_PPM 0.001          /* Deadband for small errors (1 mPPM) */
 #define FREQ_MAX_STEP_PPM 10.0           /* Max PPM step per update (rate limiting) */
 #define PLL_STABLE_COUNT 5               /* PLL stability counter threshold */
@@ -109,6 +112,19 @@
 #define PLL_THRESHOLD_US 10000           /* Threshold for FLL->PLL transition (10ms) */
 #define JITTER_HIGH_THRESHOLD_US 200000  /* 200ms - high jitter */
 #define JITTER_LOW_THRESHOLD_US 50000    /* 50ms - low jitter */
+
+/* RFC 5905 Section 11.3 - Gain scheduling constants */
+#define PGATE 4    /* Poll-adjust gate */
+#define LIMIT 30   /* Poll-adjust threshold */
+#define MINPOLL 6  /* Minimum poll interval (64 sec) */
+#define MAXPOLL 17 /* Maximum poll interval (36.4 hours) */
+
+/* ============================================================================
+ * Frequency Discipline Constants
+ * ============================================================================
+ */
+#define FREQ_FILE STATE_DIR "/frequency"
+#define FREQ_OFFSET_MAX_PPM 128.0 /* Max frequency offset (PPM) */
 
 #define NTP_LI_MASK 0xC0
 #define NTP_VN_MASK 0x38

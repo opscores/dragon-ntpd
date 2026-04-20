@@ -121,26 +121,6 @@ static double apply_loop_filter(double new_ppm, double* filter_ppm, double alpha
     return filtered;
 }
 
-static double apply_gain_scheduling(double error, double* ppm, double gain, double deadband, double max_step) {
-    /* CERT C 3.4.5: Check for NULL pointer */
-    if (ppm == NULL) { return 0.0; }
-
-    /* Apply deadband (ignore small errors) */
-    if (fabs(error) < deadband) { return *ppm; }
-
-    /* Proper gain scheduling: weighted average (CERT C 3.4.5) */
-    double new_ppm = *ppm + error * gain;
-
-    /* Rate limiting */
-    if (fabs(new_ppm - *ppm) > max_step) {
-        double step = (*ppm > new_ppm) ? -max_step : max_step;
-        new_ppm = *ppm + step;
-    }
-
-    *ppm = new_ppm;
-    return new_ppm;
-}
-
 static void update_dynamic_gain(uint64_t recent_jitter_us) {
     /* Dynamic gain scheduling based on recent jitter */
     if (recent_jitter_us > JITTER_HIGH_THRESHOLD_US) {
@@ -225,24 +205,61 @@ int apply_frequency_adjustment(double ppm) {
  * ============================================================================
  */
 
-static double calculate_fll_ppm(int64_t offset_us, time_t delta_sec) {
+/* ============================================================================
+ * RFC 5905 Section 11.3 - FLL (Frequency Locked Loop)
+ * Formula: freq += (offset - c.offset) / (max(mu, ALLAN) * (FLL - poll))
+ * ============================================================================
+ */
+static double calculate_fll_ppm(int64_t offset_us, time_t delta_sec, int poll_exp) {
     if (delta_sec <= 0) { return 0.0; }
+
+    /* RFC 5905: FLL = MAXPOLL + 1 = 18 */
+    int fll_const = MAXPOLL + 1;
+
+    /* FLL contribution: (offset - c.offset) / (max(mu, ALLAN) * (FLL - poll)) */
+    int etemp = fll_const - poll_exp;
+    if (etemp < 4) { etemp = 4; } /* RFC 5905: AVG = 4 */
+
     double offset_s = (double)offset_us / 1000000.0;
-    double ppm = (offset_s / (double)delta_sec) * 1000000.0;
+    double allan = (double)CLOCK_ALLAN_INTERCEPT;
+    double mu = (double)delta_sec;
+
+    double denom = fmax(mu, allan) * (double)etemp;
+    if (denom <= 0.0) { return 0.0; }
+
+    double ppm = offset_s / denom;
     return clamp_frequency(ppm);
 }
 
-static double calculate_pll_ppm(int64_t offset_us, time_t last_update) {
-    if (last_update <= 0) { return 0.0; }
-    time_t now = time(NULL);
-    if (now <= last_update) { return 0.0; }
-    time_t dt = now - last_update;
-    if (dt <= 0) { return 0.0; /* CERT C 3.4.5: Check for division by zero */ }
+/* ============================================================================
+ * RFC 5905 Section 11.3 - PLL (Phase Locked Loop)
+ * Formula: freq += offset * min(mu, 2^poll) / (4 * PLL * (2^poll)^2)
+ * ============================================================================
+ */
+static double calculate_pll_ppm(int64_t offset_us, time_t delta_sec, int poll_exp) {
+    if (delta_sec <= 0) { return 0.0; }
+
+    /* RFC 5905: PLL = 65536 */
+    double pll_const = 65536.0;
+
+    /* RFC 5905: PLL integration interval: min(mu, 2^poll) */
+    time_t poll_interval = 1LL << poll_exp;
+    time_t etemp = (delta_sec < poll_interval) ? delta_sec : poll_interval;
+
+    /* PLL frequency correction: offset * etemp / (4 * PLL * (2^poll)^2) */
+    double dtemp = 4.0 * pll_const * (double)poll_interval * (double)poll_interval;
+    if (dtemp <= 0.0) { return 0.0; }
+
     double offset_s = (double)offset_us / 1000000.0;
-    double ppm = (offset_s / (double)dt) * 1000000.0;
+    double ppm = offset_s * (double)etemp / dtemp;
     return clamp_frequency(ppm);
 }
 
+/* ============================================================================
+ * RFC 5905 Section 11.3 - Public API for frequency calculation
+ * Note: This is a simplified version for external use
+ * ============================================================================
+ */
 double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec) {
     if (delta_sec <= 0) { return 0.0; }
     double offset_s = (double)offset_us / 1000000.0;
@@ -265,7 +282,7 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
         time_t delta = now - g_freq_state.last_update;
         if (delta >= tc) {
             /* RFC 5905 Section 11.3: FLL for initial frequency estimation */
-            double new_ppm_calc = calculate_fll_ppm(offset_us, delta);
+            double new_ppm_calc = calculate_fll_ppm(offset_us, delta, poll_exp);
             new_ppm = new_ppm_calc;
             g_freq_state.ppm = new_ppm;
             g_freq_state.state = FREQ_STATE_FSET;
@@ -275,7 +292,7 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
         if (delta >= tc) {
             /* RFC 5905 Section 11.3: Transition from FLL to PLL */
             double old_ppm = g_freq_state.ppm;
-            double new_ppm_calc = calculate_fll_ppm(offset_us, delta);
+            double new_ppm_calc = calculate_fll_ppm(offset_us, delta, poll_exp);
             /* FLL gain: new_ppm = old + (new - old) / 2^FLLGAIN */
             new_ppm = old_ppm + (new_ppm_calc - old_ppm) / (double)(1 << CLOCK_FLLGAIN);
             g_freq_state.ppm = new_ppm;
@@ -285,7 +302,6 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
         /* FREQ_STATE_SYNC - PLL mode with proper loop filter and gain scheduling */
         time_t delta = now - g_freq_state.last_update;
         if (delta >= tc) {
-            double old_ppm = g_freq_state.ppm;
             double new_ppm_calc;
 
             /* RFC 5905 Section 11.3: FLL for large poll intervals (tau >= 2048s) */
@@ -293,32 +309,24 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
                 /* Use Allan intercept for FLL mode */
                 double avg_dt = (double)CLOCK_ALLAN_INTERCEPT;
                 if (avg_dt > 0) {
-                    new_ppm_calc = ((double)offset_us / 1000000.0) / avg_dt * 1000000.0;
+                    new_ppm_calc = calculate_fll_ppm(offset_us, (time_t)avg_dt, poll_exp);
                 } else {
                     new_ppm_calc = 0.0;
                 }
             } else {
                 /* PLL mode for small poll intervals */
-                time_t avg_dt = delta;
-                if (avg_dt > 0) {
-                    new_ppm_calc = calculate_pll_ppm(offset_us, avg_dt);
-                } else {
-                    new_ppm_calc = 0.0;
-                }
+                new_ppm_calc = calculate_pll_ppm(offset_us, delta, poll_exp);
             }
 
             /* RFC 5905 Section 11.3: Apply loop filter with dynamic gain */
-            double error = new_ppm_calc - old_ppm;
-            double filtered_ppm = old_ppm;
-
             /* Update dynamic gains based on jitter */
             update_dynamic_gain(jitter_us);
 
-            /* Apply gain scheduling with dynamic gains */
-            filtered_ppm = apply_gain_scheduling(error, &old_ppm, g_freq_state.dynamic_pll_gain, FREQ_DEADBAND_PPM, FREQ_MAX_STEP_PPM);
-
             /* Apply loop filter (low-pass) */
-            filtered_ppm = apply_loop_filter(filtered_ppm, &g_freq_state.ppm_filter, PLL_ALPHA);
+            /* Formula: filtered_ppm = old_ppm + alpha * (new_ppm - old_ppm) */
+            double filtered_ppm = apply_loop_filter(new_ppm_calc, &g_freq_state.ppm_filter, PLL_ALPHA);
+
+            g_freq_state.ppm = filtered_ppm;
 
             g_freq_state.ppm = filtered_ppm;
         }
