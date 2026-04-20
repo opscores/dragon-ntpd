@@ -75,4 +75,30 @@ uint32_t update_root_dispersion(uint32_t root_disp, uint64_t offset_us, uint64_t
 
 int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us);
 
+/* ============================================================================
+ * RFC 5905 Section 7.4 - Clock Accuracy Estimation Functions
+ * ============================================================================
+ */
+
+/* Calculate clock precision (ρ) - RFC 5905 Section 6.2 */
+double calculate_clock_precision(void);
+
+/* Calculate Allan variance for clock stability */
+double calculate_allan_variance(int64_t offset_us, time_t delta_sec);
+
+/* Update clock accuracy state */
+static void update_clock_accuracy(int64_t offset_us, time_t delta_sec);
+
+/* Initialize clock accuracy state */
+static void init_clock_accuracy(void);
+
+/* Get clock accuracy state */
+ClockAccuracyState* get_clock_accuracy_state(void);
+
+/* Get clock precision */
+double get_clock_precision(void);
+
+/* Get clock stability metric */
+double get_clock_stability(void);
+
 #endif /* TIME_SYNC_H */

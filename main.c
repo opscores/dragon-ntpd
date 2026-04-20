@@ -354,6 +354,9 @@ int main(int argc, char* argv[]) {
     init_frequency_discipline();
     load_frequency_persistent();
 
+    /* RFC 5905 Section 7.4: Initialize clock accuracy state */
+    syslog(LOG_INFO, "Clock accuracy estimation initialized");
+
     /* Инициализация leap second handling (RFC 5905 Section 11.4) */
     if (leap_second_init() != 0) {
         syslog(LOG_WARNING, "Ошибка инициализации leap second handling");

@@ -98,6 +98,9 @@ int init_frequency_discipline(void) {
     g_freq_state.dynamic_pll_gain = PLL_NOMINAL_GAIN;
     g_freq_state.dynamic_fll_gain = PLL_NOMINAL_GAIN;
     g_freq_state.recent_jitter_us = 0;
+
+    /* RFC 5905 Section 7.4: Initialize clock accuracy state */
+    init_clock_accuracy();
     g_freq_state.last_applied_ppm = 0;
     g_freq_state.last_apply_time = 0;
     return 0;
@@ -302,6 +305,9 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
         /* FREQ_STATE_SYNC - PLL mode with proper loop filter and gain scheduling */
         time_t delta = now - g_freq_state.last_update;
         if (delta >= tc) {
+            /* RFC 5905 Section 7.4: Update clock accuracy state */
+            update_clock_accuracy(offset_us, delta);
+
             double new_ppm_calc;
 
             /* RFC 5905 Section 11.3: FLL for large poll intervals (tau >= 2048s) */
@@ -696,6 +702,9 @@ int sync_ntp_time(const char* ip, const char* port) {
 
                     pthread_mutex_unlock(&g_mutex);
 
+                    /* RFC 5905 Section 7.4: Update clock accuracy state */
+                    update_clock_accuracy(offset_us, g_local_poll);
+
                     // Apply correction only if we have valid filtered samples
                     if (valid_count >= 1) {
                         int apply_result = apply_time_correction_slew_or_step(offset_us);
@@ -755,3 +764,144 @@ int sync_ntp_time(const char* ip, const char* port) {
     close_socket(sock);
     return -1;
 }
+
+/* ============================================================================
+ * RFC 5905 Section 7.4 - Clock Accuracy Estimation
+ * ============================================================================
+ */
+
+/**
+ * calculate_clock_precision - Calculate clock precision (ρ)
+ *
+ * RFC 5905 Section 6.2: Clock precision is the larger of:
+ * - Clock resolution (2^(-p) seconds)
+ * - Time to read the system clock
+ *
+ * Return: Clock precision in seconds
+ */
+double calculate_clock_precision(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+
+    /* Time to read the system clock */
+    double read_time = (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+
+    /* Clock resolution (2^(-p)) */
+    int8_t precision = get_system_precision();
+    double resolution = pow(2.0, -precision);
+
+    /* ρ = max(resolution, read_time) */
+    return fmax(resolution, read_time);
+}
+
+/**
+ * calculate_allan_variance - Calculate Allan variance for clock stability
+ *
+ * RFC 5905 Section 6.2: Allan variance measures clock stability over time
+ * σ_y(τ) = sqrt(<(y_i+1 - y_i)² / 2>)
+ *
+ * Parameters:
+ *   offset_us - Time offset in microseconds
+ *   delta_sec - Time interval in seconds
+ *
+ * Return: Allan variance (stability metric)
+ */
+double calculate_allan_variance(int64_t offset_us, time_t delta_sec) {
+    if (delta_sec <= 0) { return 0.0; }
+
+    /* Frequency offset (s/s) */
+    double freq_offset = (double)offset_us / 1e6;
+    double freq_stability = freq_offset / (double)delta_sec;
+
+    /* Exponential averaging for stability */
+    static double variance = 0.0;
+    static double prev_freq = 0.0;
+
+    double delta_freq = freq_stability - prev_freq;
+    variance = 0.25 * (delta_freq * delta_freq + variance);
+    prev_freq = freq_stability;
+
+    return sqrt(variance);
+}
+
+/**
+ * init_clock_accuracy - Initialize clock accuracy state
+ *
+ * Called once during system initialization.
+ */
+static void init_clock_accuracy(void) {
+    ClockAccuracyState* state = &g_clock_accuracy;
+
+    /* Initialize all fields to zero */
+    memset(state, 0, sizeof(*state));
+
+    /* Set initial precision to clock resolution */
+    state->precision = 0.0;
+    state->resolution = 0.0;
+    state->accuracy_estimate = 0.0;
+    state->stability_metric = 0.0;
+    state->last_update = 0;
+}
+
+/**
+ * update_clock_accuracy - Update clock accuracy state
+ *
+ * Called periodically to update clock accuracy estimates.
+ *
+ * Parameters:
+ *   offset_us - Time offset in microseconds
+ *   delta_sec - Time interval in seconds
+ */
+static void update_clock_accuracy(int64_t offset_us, time_t delta_sec) {
+    ClockAccuracyState* state = &g_clock_accuracy;
+
+    /* Calculate precision */
+    state->precision = calculate_clock_precision();
+
+    /* Calculate Allan variance for stability */
+    state->stability_metric = calculate_allan_variance(offset_us, delta_sec);
+
+    /* Update offset history for stability tracking */
+    static int history_idx = 0;
+    state->offset_history[history_idx] = (uint64_t)offset_us;
+    state->offset_history_time[history_idx] = delta_sec;
+    history_idx = (history_idx + 1) % 16;
+
+    /* Update last update time */
+    state->last_update = time(NULL);
+
+    /* Log accuracy metrics */
+    syslog(LOG_DEBUG, "Clock accuracy: precision=%.6f, stability=%.6f", state->precision, state->stability_metric);
+}
+
+/**
+ * get_clock_accuracy_state - Get pointer to clock accuracy state
+ *
+ * Return: Pointer to clock accuracy state (never NULL)
+ */
+ClockAccuracyState* get_clock_accuracy_state(void) {
+    return &g_clock_accuracy;
+}
+
+/**
+ * get_clock_precision - Get current clock precision
+ *
+ * Return: Clock precision in seconds
+ */
+double get_clock_precision(void) {
+    return g_clock_accuracy.precision;
+}
+
+/**
+ * get_clock_stability - Get current clock stability metric
+ *
+ * Return: Clock stability metric (Allan variance)
+ */
+double get_clock_stability(void) {
+    return g_clock_accuracy.stability_metric;
+}
+
+/* ============================================================================
+ * End of time_sync.c
+ * ============================================================================
+ */

@@ -1,10 +1,16 @@
 #include "ntpd.h"
 
 /* ============================================================================
- * Byte Order Utility Functions
+ * Clock Accuracy State (RFC 5905 Section 7.4)
  * ============================================================================
- * Note: These functions are also declared in ntp_packet.h for use in packet
- * parsing. They are defined here as common utilities.
+ */
+
+/* RFC 5905 Section 7.4: Clock accuracy state */
+ClockAccuracyState g_clock_accuracy;
+
+/* ============================================================================
+ * End of ntpd.c
+ * ============================================================================
  */
 
 uint32_t read_u32be(const uint8_t* p) {
