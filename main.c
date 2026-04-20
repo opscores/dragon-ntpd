@@ -218,8 +218,10 @@ int load_server_config(void) {
         pthread_mutex_lock(&g_mutex);
         if (g_peer_pool_count < MAX_PEERS) {
             /* CERT C 3.4.5: Use snprintf for bounds-safe string copy */
-            snprintf(g_peer_pool[g_peer_pool_count].ip, sizeof(g_peer_pool[g_peer_pool_count].ip), "%s", ip_str);
-            snprintf(g_peer_pool[g_peer_pool_count].port, sizeof(g_peer_pool[g_peer_pool_count].port), "%s", port_str);
+            snprintf(g_peer_pool[g_peer_pool_count].ip, sizeof(g_peer_pool[g_peer_pool_count].ip), "%.*s", (int)(sizeof(g_peer_pool[g_peer_pool_count].ip) - 1),
+                     ip_str);
+            snprintf(g_peer_pool[g_peer_pool_count].port, sizeof(g_peer_pool[g_peer_pool_count].port), "%.*s",
+                     (int)(sizeof(g_peer_pool[g_peer_pool_count].port) - 1), port_str);
             g_peer_pool[g_peer_pool_count].stratum = 16; /* Unsynchronized */
             g_peer_pool[g_peer_pool_count].delay_us = 0;
             g_peer_pool[g_peer_pool_count].offset_us = 0;
