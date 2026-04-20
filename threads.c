@@ -16,7 +16,9 @@
  * - Барьеры памяти для согласованности видимости данных
  */
 
+#include "ntp_packet.h"
 #include "ntpd.h"
+#include "time_sync.h"
 #include <stdatomic.h> /* C11 atomic operations */
 
 /* ============================================================================

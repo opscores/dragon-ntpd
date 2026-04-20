@@ -195,4 +195,7 @@ const char* ido_state_name(uint8_t state);
  */
 const char* ido_capability_name(uint8_t flag);
 
+/* Global I-DO state */
+extern IdoState g_ido_state;
+
 #endif /* IDO_H */

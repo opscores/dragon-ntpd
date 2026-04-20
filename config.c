@@ -5,6 +5,12 @@
  */
 
 #include "ntpd.h"
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define RET_HELP 2
 #define RET_VERSION 3

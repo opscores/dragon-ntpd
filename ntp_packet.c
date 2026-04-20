@@ -1,25 +1,26 @@
+#include "ntp_packet.h"
 #include "ido.h"
+#include "ntp_algorithms.h"
 #include "ntpd.h"
+#include "time_sync.h"
 
-/* I-DO State Machine Events (RFC 5905 Section 8.4) */
-#define IDO_EVENT_OFFER_RECEIVED (1)
-#define IDO_EVENT_RESPONSE_SENT (2)
-#define IDO_EVENT_AUTH_ESTABLISHED (3)
-#define IDO_EVENT_NEGOTIATION_FAILED (4)
+/* ============================================================================
+ * Constants
+ * ============================================================================
+ */
 
-uint32_t read_u32be(const uint8_t* p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
-}
+#define NS_PER_SEC 1000000000LL /* Nanoseconds per second */
 
-void write_u32be(uint8_t* p, uint32_t v) {
-    p[0] = (uint8_t)(v >> 24);
-    p[1] = (uint8_t)(v >> 16);
-    p[2] = (uint8_t)(v >> 8);
-    p[3] = (uint8_t)(v);
-}
+/* ============================================================================
+ * Forward Declarations
+ * ============================================================================
+ */
 
-/**
- * NTP Extension Field Types (RFC 5905 Section 2.1, RFC 8915)
+/* read_u32be() and write_u32be() are declared in ntp_packet.h and defined in ntpd.c */
+
+/* ============================================================================
+ * I-DO Capability Negotiation Functions (RFC 5905 Section 8.4)
+ * ============================================================================
  */
 #define NTP_EF_CRYPTO_NAK 0x0000    /* Crypto-NAK: authentication failure */
 #define NTP_EF_MAC 0x0003           /* Legacy MAC */
@@ -267,9 +268,9 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
             /* Update state machine with appropriate event based on field type */
             uint8_t ret_state = IDO_STATE_IDLE;
             if (field_type == NTP_EF_I_DO_OFFER) {
-                ret_state = ido_state_machine(&g_ido_state, IDO_EVENT_OFFER_RECEIVED);
+                ret_state = ido_state_machine(&g_ido_state, IDO_STATE_OFFER_RECEIVED);
             } else if (field_type == NTP_EF_I_DO_RESPONSE) {
-                ret_state = ido_state_machine(&g_ido_state, IDO_EVENT_RESPONSE_SENT);
+                ret_state = ido_state_machine(&g_ido_state, IDO_STATE_RESPONSE_SENT);
             }
             (void)ret_state; /* Suppress unused variable warning */
 
@@ -346,17 +347,25 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
     return (int)skipped;
 }
 
-/**
- * parse_ntp_packet - Parse NTP packet from raw buffer
- * @buffer: Pointer to raw packet data
- * @size: Size of packet data in bytes
- * @pkt: Pointer to NtpPacket structure to fill
- *
- * Parses NTP packet format (RFC 5905 Section 7.3) from raw buffer.
- * Validates packet size and checks for KOD markers.
- *
- * Return: true on success, false on error
+/* ============================================================================
+ * NTP Packet Parsing Functions (RFC 5905 Section 7.3)
+ * ============================================================================
  */
+
+/**
+ * Check if packet is a Kiss-o'-Death response
+ * @param pkt Pointer to NtpPacket
+ * @return true if KOD, false otherwise
+ */
+bool ntp_is_kod(const NtpPacket* pkt) {
+    if (pkt == NULL) return false;
+
+    /* RFC 5905 Section 8.3: KOD in header
+     * stratum=127 (0x7F) and leap=3 indicates KOD */
+    uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
+    return pkt->stratum == 127 && li == 3;
+}
+
 bool parse_ntp_packet(const void* buffer, size_t size, NtpPacket* pkt) {
     if (buffer == NULL || pkt == NULL) {
         syslog(LOG_WARNING, "NULL указатель при парсинге пакета");
@@ -443,17 +452,9 @@ void create_ntp_request(void* buffer, NtpTimestamp* xmit_out) {
     if (xmit_out != NULL) { *xmit_out = t1; }
 }
 
-bool ntp_is_kod(const NtpPacket* pkt) {
-    if (pkt == NULL) return false;
-
-    /* RFC 5905 Section 8.3: KOD in header
-     * stratum=127 (0x7F) and leap=3 indicates KOD */
-    uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
-    return pkt->stratum == 127 && li == 3;
-}
-
-#include "ntpd.h"
-
-/**
- * I-DO Capability Negotiation Functions (RFC 5905 Section 8.4)
+/* ============================================================================
+ * Utility Functions
+ * ============================================================================
  */
+
+/* Note: read_u32be() and write_u32be() are defined in ntpd.c */

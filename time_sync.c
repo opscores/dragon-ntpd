@@ -1,5 +1,14 @@
 #define _GNU_SOURCE
+#include "time_sync.h"
+#include "filter.h"
+#include "ido.h"
+#include "leap_second.h"
+#include "mode_handler.h"
+#include "ntp_algorithms.h"
+#include "ntp_packet.h"
 #include "ntpd.h"
+#include "socket.h"
+#include "threads.h"
 #include <sys/timex.h>
 
 /* ============================================================================
@@ -424,6 +433,65 @@ int8_t get_system_precision(void) {
         return p;
     }
     return -20;
+}
+
+/* ============================================================================
+ * Dispersion Update Function (RFC 5905 Section 11.1)
+ * ============================================================================
+ */
+
+uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us) {
+    time_t now = time(NULL);
+
+    pthread_mutex_lock(&g_mutex);
+
+    if (g_last_dispersion_update == 0) {
+        g_last_dispersion_update = now;
+        pthread_mutex_unlock(&g_mutex);
+        return current_disp;
+    }
+
+    int64_t elapsed_sec = (int64_t)now - (int64_t)g_last_dispersion_update;
+    if (elapsed_sec < 0) { elapsed_sec = 0; }
+
+    double phi_dispersion = ((double)PHI * (double)elapsed_sec) / 1000000.0;
+
+    uint64_t disp_us = offset_us;
+    uint64_t jitter_us_val = jitter_us;
+
+    if (disp_us > (uint64_t)UINT32_MAX) { disp_us = UINT32_MAX; }
+
+    double new_disp;
+    if (phi_dispersion > (double)UINT32_MAX - (double)disp_us - (double)jitter_us_val) {
+        new_disp = (double)UINT32_MAX;
+    } else {
+        new_disp = phi_dispersion + (double)disp_us + (double)jitter_us_val;
+    }
+
+    g_last_dispersion_update = now;
+    pthread_mutex_unlock(&g_mutex);
+
+    return ntp_u16_16_from_us((uint64_t)new_disp);
+}
+
+/* ============================================================================
+ * Poll Interval Adjustment Functions
+ * ============================================================================
+ */
+
+int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us) {
+    int8_t new_poll = current_poll;
+
+    if (peer_poll < current_poll) { new_poll = peer_poll; }
+
+    if (delay_us > POLL_DELAY_HIGH_THRESHOLD_US || offset_us > (int64_t)POLL_OFFSET_HIGH_THRESHOLD_US || offset_us < -(int64_t)POLL_OFFSET_HIGH_THRESHOLD_US) {
+        if (new_poll < POLL_INTERVAL_MAX) { new_poll++; }
+    } else if (delay_us < POLL_DELAY_LOW_THRESHOLD_US && offset_us > -(int64_t)POLL_OFFSET_LOW_THRESHOLD_US &&
+               offset_us < (int64_t)POLL_OFFSET_LOW_THRESHOLD_US) {
+        if (new_poll > POLL_INTERVAL_MIN) { new_poll--; }
+    }
+
+    return new_poll;
 }
 
 int sync_ntp_time(const char* ip, const char* port) {

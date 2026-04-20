@@ -2,8 +2,11 @@
 #include "mode_handler.h"
 #include "network4.h"
 #include "network6.h"
+#include "ntp_algorithms.h"
+#include "ntp_packet.h"
 #include "ntpd.h"
 #include "threads.h"
+#include "time_sync.h"
 #include <stdlib.h>
 #include <sys/select.h>
 

@@ -5,9 +5,6 @@
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "ido.h"
-#include "mode_handler.h"
-#include "socket.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -46,6 +43,11 @@
 #ifndef IFNAMSZ
 #define IFNAMSZ 16
 #endif
+
+/* ============================================================================
+ * Version and Configuration
+ * ============================================================================
+ */
 
 #define VERSION "1.0.0"
 #define CONFIG_DIR "/etc/dntpd"
@@ -120,7 +122,8 @@
 
 /* ============================================================================
  * Leap Second Handling (RFC 5905 Section 11.4)
- * ============================================================================ */
+ * ============================================================================
+ */
 #define LEAP_SECOND_DIR_POSITIVE 1 /* +1s at end of minute */
 #define LEAP_SECOND_DIR_NEGATIVE 2 /* -1s at end of minute */
 #define LEAP_SECOND_FILE_DIR_POSITIVE 1
@@ -130,6 +133,11 @@
 #define LEAP_SECOND_FILE_SUFFIX ".s"
 #define LEAP_SECOND_EVENT_INTERVAL_SEC 60
 #define LEAP_SECOND_CHECK_INTERVAL_SEC 300
+
+/* ============================================================================
+ * Type Definitions
+ * ============================================================================
+ */
 
 typedef struct {
     uint32_t sec;
@@ -183,6 +191,11 @@ typedef struct {
 } PeerRequestData;
 
 /* Clock discipline states */
+#define FREQ_STATE_NSET 0
+#define FREQ_STATE_FSET 1
+#define FREQ_STATE_SYNC 2
+#define FREQ_STATE_RECOVER 3
+
 typedef struct {
     double ppm;
     time_t last_update;
@@ -211,12 +224,6 @@ typedef struct {
     time_t last_apply_time;   /* Last apply time */
 } FreqState;
 
-/* Clock discipline states */
-#define FREQ_STATE_NSET 0
-#define FREQ_STATE_FSET 1
-#define FREQ_STATE_SYNC 2
-#define FREQ_STATE_RECOVER 3
-
 typedef struct {
     char* config_file;
     char* pid_file;
@@ -235,6 +242,11 @@ typedef struct {
     char* broadcast_addr;   /* Custom broadcast address (NULL = default) */
     int broadcast_interval; /* Interval in seconds (32-128, default: 64) */
 } CliConfig;
+
+/* ============================================================================
+ * Global Variables
+ * ============================================================================
+ */
 
 extern ServerConfig* g_servers;
 extern int g_server_count;
@@ -259,101 +271,9 @@ extern int8_t g_local_precision;
 extern int8_t g_local_poll;
 extern int8_t g_peer_poll;
 extern FreqState g_freq_state;
-extern IdoState g_ido_state; /* I-DO state (RFC 5905 Section 8.4) */
 
 extern CliConfig g_cli;
 
 extern pthread_mutex_t g_mutex;
 
-/* Network utility functions */
-uint16_t nport(uint16_t port);
-int npton(uint16_t port, char* buf, size_t buf_size);
-
-void print_usage(const char* prog);
-void print_version(void);
-int parse_arguments(int argc, char* argv[]);
-int load_server_config(void);
-void cleanup_resources(void);
-int apply_user_privileges(const char* username);
-
-uint32_t read_u32be(const uint8_t* p);
-void write_u32be(uint8_t* p, uint32_t v);
-bool parse_ntp_packet(const void* buffer, size_t size, NtpPacket* pkt);
-void create_ntp_request(void* buffer, NtpTimestamp* xmit_out);
-bool ntp_is_kod(const NtpPacket* pkt);
-
-int64_t ntp_timestamp_to_ns(const NtpTimestamp* ts);
-bool calculate_delay_offset(const NtpTimestamp* t1, const NtpTimestamp* t2, const NtpTimestamp* t3, const NtpTimestamp* t4, uint64_t* delay_us,
-                            int64_t* offset_us);
-bool handle_leap_indicator(uint8_t li);
-int leap_second_init(void);
-int leap_second_cleanup(void);
-int leap_second_check_file(void);
-int leap_second_schedule_event(uint8_t leap_dir, const char* file_name);
-int leap_second_apply_correction(uint8_t leap_dir);
-int leap_second_check_and_apply(void);
-uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum);
-uint8_t compute_system_offset(const int64_t* offsets, int count, int* best_idx);
-int select_best_peers(const int64_t* offsets, const uint64_t* jitter, int count, int* valid_indices, int* valid_count);
-int64_t majority_vote(const int64_t* offsets, int count);
-bool is_false_ticker(int64_t peer_offset, int64_t cluster_offset);
-uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us);
-int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us);
-uint32_t ntp_u16_16_from_us(uint64_t us);
-
-uint8_t calculate_network_quality(uint64_t delay_us);
-
-void marx_add_sample_us(uint64_t ts_ns, uint64_t delay_us, int64_t offset_us);
-void marx_remove_sample(int index);
-uint64_t marx_median(uint64_t* arr, int count);
-int marx_filter_outliers(NtpSample* samples, int count, int k);
-uint64_t ntp_offset_jitter_us_locked(void);
-
-/* ============================================================================
- * Time synchronization (RFC 5905 Section 11.3)
- * ============================================================================ */
-/* Frequency discipline */
-int init_frequency_discipline(void);
-int load_frequency_persistent(void);
-int save_frequency_persistent(void);
-int apply_frequency_adjustment(double ppm);
-int update_frequency_discipline(int64_t offset_us, int poll_exp);
-double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec);
-
-/* Time correction */
-int apply_time_correction_slew_or_step(int64_t offset_us);
-int sync_ntp_time(const char* ip, const char* port);
-NtpTimestamp ntp_timestamp_now(void);
-int8_t get_system_precision(void);
-
-/* ============================================================================
- * Network functions - now in socket.h
- * ============================================================================ */
-
-/* Threads functions (RFC 5905 Section 5) */
-int start_clock_thread(int interval_sec);
-void stop_clock_thread(void);
-void cleanup_clock_thread(void);
-int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* peer_state, int idx);
-void stop_peer_thread(void);
-void cleanup_peer_thread(void);
-
-/* Mode handler and ACL (Security-First) */
-int mode_handler_init(void);
-void mode_handler_cleanup(void);
-int mode_handler_set_config(const ModeConfig* config);
-int mode_handler_get_config(ModeConfig* config);
-int acl_add_entry(const char* network, uint8_t flags);
-int acl_check_client(const char* client_ip, uint8_t packet_mode);
-uint8_t acl_get_client_flags(const char* client_ip);
-int rate_limit_check(const char* client_ip);
-void rate_limit_update(const char* client_ip);
-uint8_t mode_get_default_li(void);
-uint8_t mode_get_default_stratum(void);
-uint32_t mode_get_default_ref_id(void);
-int validate_packet_mode(uint8_t mode, size_t req_size, size_t resp_size);
-int validate_packet_authentication(const void* buffer, size_t size);
-int check_panic_condition(int64_t time_offset);
-int mode_handler_parse_config(const char* config_file);
-
-#endif
+#endif /* NTPD_H */

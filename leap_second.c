@@ -1,5 +1,7 @@
 #define _GNU_SOURCE
+#include "leap_second.h"
 #include "ntpd.h"
+#include "time_sync.h"
 
 /* ============================================================================
  * Leap Second Handling (RFC 5905 Section 11.4)

@@ -204,17 +204,13 @@ void handle_client_request(const void* buffer, size_t size, const char* ip, cons
  * @return 0 on success, -1 on error
  */
 int start_tcp_listener(void);
-
-/**
- * Stop TCP listener thread
- */
 void stop_tcp_listener(void);
 
-/**
- * Start NTPQ query handler thread
- *
- * @return 0 on success, -1 on error
- */
 int start_ntpq_thread(void);
+
+/* ============================================================================
+ * Network Utility Functions
+ * ============================================================================
+ */
 
 #endif /* NTPD_SOCKET_H */

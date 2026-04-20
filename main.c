@@ -1,4 +1,15 @@
+#include "main.h"
+#include "config.h"
+#include "filter.h"
+#include "ido.h"
+#include "leap_second.h"
+#include "mode_handler.h"
+#include "ntp_algorithms.h"
+#include "ntp_packet.h"
 #include "ntpd.h"
+#include "socket.h"
+#include "threads.h"
+#include "time_sync.h"
 
 ServerConfig* g_servers = NULL;
 int g_server_count = 0;

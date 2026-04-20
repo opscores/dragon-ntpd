@@ -103,6 +103,91 @@ panic_threshold 1000
 └────────────────────────────────────────────────┘
 ```
 
+## Module Dependencies
+
+### Architecture Layers
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Layer 5: Application (main.c)                                   │
+│   • Initialization, main sync loop                              │
+├─────────────────────────────────────────────────────────────────┤
+│ Layer 4: Business Logic (time_sync.c, ntp_algorithms.c)         │
+│   • Time synchronization, peer selection algorithms             │
+├─────────────────────────────────────────────────────────────────┤
+│ Layer 3: Domain Logic (ntp_packet.c, filter.c)                  │
+│   • Packet parsing, MARX filter                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ Layer 2: Infrastructure (socket.c, threads.c)                   │
+│   • Sockets, threads, TCP listener                              │
+├─────────────────────────────────────────────────────────────────┤
+│ Layer 1: Low-level (network4/6.c, ido.c, mode_handler.c)        │
+│   • IPv4/IPv6 operations, I-DO state machine, ACL               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Dependency Graph
+
+```
+                    ┌─────────────┐
+                    │   ntpd.h    │ (Base types & constants)
+                    └──────┬──────┘
+           ┌───────────────┼───────────────┐
+           ↓               ↓               ↓
+    ┌────────────┐  ┌─────────────┐  ┌──────────────┐
+    │  ido.h     │  │ ntp_packet.h│  │ mode_handler.h│
+    └─────┬──────┘  └──────┬──────┘  └──────────────┘
+          │                │
+          └────────┬───────┘
+                   ↓
+    ┌──────────────┼──────────────┐
+    ↓              ↓              ↓
+┌────────┐  ┌────────────┐  ┌──────────────┐
+│filter.h│  │ntp_algo.h  │  │ time_sync.h  │
+└────────┘  └─────┬──────┘  └──────┬───────┘
+                  │                │
+                  └───────┬────────┘
+                          ↓
+              ┌───────────┼───────────┐
+              ↓           ↓           ↓
+         ┌────────┐ ┌────────┐ ┌────────────┐
+         │socket.h│ │thread.h│ │leap_sec.h  │
+         └───┬────┘ └────────┘ └────────────┘
+             ↓
+         ┌─────────────┐
+         │network4.h   │
+         │network6.h   │
+         └─────────────┘
+```
+
+### Module Responsibilities
+
+| Module | RFC 5905 | Responsibility | Dependencies |
+|--------|----------|----------------|--------------|
+| `ntpd.h/c` | — | Base types, constants, globals, common utilities | None (system headers only) |
+| `ido.h/c` | §8.4 | I-DO capability negotiation | None |
+| `ntp_packet.h/c` | §7.3, §7.5, §8.3 | Packet parsing, extension fields | `ntpd.h`, `ido.h` |
+| `ntp_algorithms.h/c` | §11.2.1, §6 | Byzantine fault detection, peer selection | `ntpd.h` |
+| `filter.h/c` | §10 | MARX filter, outlier rejection | `ntpd.h` |
+| `time_sync.h/c` | §11.3, §11.4 | Clock discipline, leap second, sync | `ntpd.h` |
+| `leap_second.h/c` | §11.4 | Leap second file handling | None |
+| `threads.h/c` | §5 | Peer & clock threads | None |
+| `socket.h/c` | §5 | Socket management, TCP listener | None |
+| `network4.h/c` | §5 | IPv4 operations | None |
+| `network6.h/c` | §5, §6 | IPv6 operations | None |
+| `mode_handler.h/c` | §7.2, §8 | ACL, rate limiting, security | None |
+| `main.c` | — | Entry point, main loop | All modules |
+| `config.c` | — | CLI parsing, configuration | `ntpd.h` |
+
+### Design Principles
+
+- **Single Responsibility Principle (SRP):** Each module has one well-defined responsibility
+- **Separation of Concerns:** 5-layer architecture with clear boundaries
+- **High Cohesion:** Functions within each module are closely related
+- **Low Coupling:** Minimal dependencies between modules
+- **No Cyclic Dependencies:** Strict hierarchical dependency structure
+- **RFC 5905 Compliance:** Module structure mirrors RFC sections
+
 ## Building
 
 ```bash
