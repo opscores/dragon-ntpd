@@ -87,10 +87,10 @@ double calculate_clock_precision(void);
 double calculate_allan_variance(int64_t offset_us, time_t delta_sec);
 
 /* Update clock accuracy state */
-static void update_clock_accuracy(int64_t offset_us, time_t delta_sec);
+void update_clock_accuracy(int64_t offset_us, time_t delta_sec);
 
 /* Initialize clock accuracy state */
-static void init_clock_accuracy(void);
+void init_clock_accuracy(void);
 
 /* Get clock accuracy state */
 ClockAccuracyState* get_clock_accuracy_state(void);
