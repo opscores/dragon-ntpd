@@ -9,6 +9,16 @@
 #define RET_HELP 2
 #define RET_VERSION 3
 
+/* Network utility functions */
+uint16_t nport(uint16_t port) {
+    return htons(port);
+}
+
+int npton(uint16_t port, char* buf, size_t buf_size) {
+    if (buf_size == 0 || buf == NULL) { return -1; }
+    return snprintf(buf, buf_size, "%u", ntohs(port));
+}
+
 CliConfig g_cli = {.config_file = CONFIG_FILE,
                    .pid_file = DEFAULT_PID_FILE,
                    .log_file = NULL,

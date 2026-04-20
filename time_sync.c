@@ -2,118 +2,9 @@
 #include "ntpd.h"
 #include <sys/timex.h>
 
-/**
- * get_system_precision - Get system clock precision
- *
- * Returns clock precision as signed exponent (RFC 5905 Section 6):
- * Negative values = sub-second (e.g., -20 = ~1 microsecond)
- * Positive values = second+ (e.g., 4 = 16 seconds)
- *
- * Uses clock_getres(CLOCK_REALTIME) to determine resolution.
- * Returns -20 on error (typical for modern systems).
- *
- * Return: Precision as log2(seconds), or -20 on error
- */
-int8_t get_system_precision(void) {
-    struct timespec ts;
-    if (clock_getres(CLOCK_REALTIME, &ts) == 0) {
-        if (ts.tv_sec == 0 && ts.tv_nsec == 0) { return -20; }
-        if (ts.tv_sec > 0) {
-            int8_t p = 0;
-            time_t s = ts.tv_sec;
-            while (s > 0) {
-                p++;
-                s >>= 1;
-            }
-            return (p > 6) ? 6 : -p;
-        }
-        int64_t ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
-        if (ns <= 0) return -20;
-        int8_t p = 0;
-        while (ns < 1000000000LL) {
-            p--;
-            ns <<= 1;
-        }
-        return p;
-    }
-    return -20;
-}
-
-NtpTimestamp ntp_timestamp_now(void) {
-    struct timespec ts;
-    if (clock_gettime(CLOCK_REALTIME, &ts) < 0) {
-        syslog(LOG_ERR, "Ошибка получения времени: %s", strerror(errno));
-        NtpTimestamp z = {0, 0};
-        return z;
-    }
-    uint64_t sec = (uint64_t)ts.tv_sec + (uint64_t)NTP_UNIX_EPOCH_DELTA;
-    NtpTimestamp t = {0, 0};
-    if (sec > UINT32_MAX) {
-        t.sec = UINT32_MAX;
-        t.frac = UINT32_MAX;
-        return t;
-    }
-    t.sec = (uint32_t)sec;
-    uint64_t frac = ((uint64_t)ts.tv_nsec << 32) / 1000000000ULL;
-    t.frac = (uint32_t)frac;
-    return t;
-}
-
-/**
- * apply_time_correction_slew_or_step - Apply time correction using slew or step
- * @offset_us: Time offset in microseconds
- *
- * Applies time correction according to RFC 5905 Section 11.3:
- * - STEP (clock_settime): |offset| > 500ms (STEP_THRESHOLD_US)
- * - SLEW (adjtime): |offset| <= 500ms
- *
- * Checks for integer overflow before applying correction.
- *
- * Return: 0 on success, -1 on error
- */
-int apply_time_correction_slew_or_step(int64_t offset_us) {
-    /* Check panic condition (RFC 5905 Section 11.3) */
-    if (check_panic_condition(offset_us)) {
-        syslog(LOG_WARNING, "Panic condition detected: time offset %lus exceeds threshold", offset_us / 1000);
-        return -1;
-    }
-
-    if (offset_us > STEP_THRESHOLD_US || offset_us < -STEP_THRESHOLD_US) {
-        struct timespec now_ts;
-        if (clock_gettime(CLOCK_REALTIME, &now_ts) != 0) return -1;
-
-        int64_t offset_ns = offset_us * 1000LL;
-        int64_t ns = (int64_t)now_ts.tv_sec * 1000000000LL + (int64_t)now_ts.tv_nsec;
-
-        if (offset_ns > 0 && ns > INT64_MAX - offset_ns) {
-            syslog(LOG_ERR, "Integer overflow in time correction");
-            return -1;
-        }
-        if (offset_ns < 0 && ns < INT64_MIN - offset_ns) {
-            syslog(LOG_ERR, "Integer overflow in time correction");
-            return -1;
-        }
-
-        ns += offset_ns;
-        struct timespec new_ts;
-        new_ts.tv_sec = (time_t)(ns / 1000000000LL);
-        new_ts.tv_nsec = (long)(ns % 1000000000LL);
-        if (new_ts.tv_nsec < 0) {
-            new_ts.tv_nsec += 1000000000L;
-            new_ts.tv_sec -= 1;
-        }
-        return clock_settime(CLOCK_REALTIME, &new_ts);
-    }
-
-    struct timeval delta;
-    delta.tv_sec = (time_t)(offset_us / 1000000LL);
-    delta.tv_usec = (suseconds_t)(offset_us % 1000000LL);
-    if (delta.tv_usec < 0) {
-        delta.tv_usec += 1000000;
-        delta.tv_sec -= 1;
-    }
-    return adjtime(&delta, NULL);
-}
+/* ============================================================================
+ * File I/O helpers for frequency persistence
+ * ============================================================================ */
 
 static int freq_file_write(double ppm) {
     FILE* fp = fopen(FREQ_FILE, "w");
@@ -136,6 +27,10 @@ static int freq_file_read(double* ppm_out) {
     fclose(fp);
     return 0;
 }
+
+/* ============================================================================
+ * Frequency discipline state management
+ * ============================================================================ */
 
 int load_frequency_persistent(void) {
     double ppm = 0.0;
@@ -174,6 +69,10 @@ int init_frequency_discipline(void) {
     g_freq_state.last_apply_time = 0;
     return 0;
 }
+
+/* ============================================================================
+ * Loop filter utilities
+ * ============================================================================ */
 
 static double apply_loop_filter(double new_ppm, double* filter_ppm, double alpha) {
     /* CERT C 3.4.5: Check for NULL pointer */
@@ -221,6 +120,11 @@ static void update_dynamic_gain(uint64_t recent_jitter_us) {
         g_freq_state.dynamic_pll_gain = PLL_NOMINAL_GAIN;
     }
 }
+
+/* ============================================================================
+ * Frequency adjustment functions
+ * ============================================================================ */
+
 static int apply_freq_adjtime(double ppm) {
     double adj_sec = ppm / 1000000.0;
     struct timeval delta;
@@ -266,12 +170,12 @@ static int apply_freq_adjtimex(double ppm) {
 }
 
 static double clamp_frequency(double ppm) {
-    if (ppm > FREQ_OFFSET_MAX_PPM) return FREQ_OFFSET_MAX_PPM;
-    if (ppm < -FREQ_OFFSET_MAX_PPM) return -FREQ_OFFSET_MAX_PPM;
+    if (ppm > FREQ_OFFSET_MAX_PPM) { return FREQ_OFFSET_MAX_PPM; }
+    if (ppm < -FREQ_OFFSET_MAX_PPM) { return -FREQ_OFFSET_MAX_PPM; }
     return ppm;
 }
 
-static int apply_frequency_adjustment(double ppm) {
+int apply_frequency_adjustment(double ppm) {
     double clamped = clamp_frequency(ppm);
     if (fabs(clamped) < 0.001) { return 0; }
     if (apply_freq_adjtimex(clamped) == 0) {
@@ -281,23 +185,38 @@ static int apply_frequency_adjustment(double ppm) {
     return apply_freq_adjtime(clamped);
 }
 
+/* ============================================================================
+ * Frequency calculation functions
+ * ============================================================================ */
+
 static double calculate_fll_ppm(int64_t offset_us, time_t delta_sec) {
-    if (delta_sec <= 0) return 0.0;
+    if (delta_sec <= 0) { return 0.0; }
     double offset_s = (double)offset_us / 1000000.0;
     double ppm = (offset_s / (double)delta_sec) * 1000000.0;
     return clamp_frequency(ppm);
 }
 
 static double calculate_pll_ppm(int64_t offset_us, time_t last_update) {
-    if (last_update <= 0) return 0.0;
+    if (last_update <= 0) { return 0.0; }
     time_t now = time(NULL);
-    if (now <= last_update) return 0.0;
+    if (now <= last_update) { return 0.0; }
     time_t dt = now - last_update;
-    if (dt <= 0) return 0.0; /* CERT C 3.4.5: Check for division by zero */
+    if (dt <= 0) { return 0.0; /* CERT C 3.4.5: Check for division by zero */ }
     double offset_s = (double)offset_us / 1000000.0;
     double ppm = (offset_s / (double)dt) * 1000000.0;
     return clamp_frequency(ppm);
 }
+
+double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec) {
+    if (delta_sec <= 0) { return 0.0; }
+    double offset_s = (double)offset_us / 1000000.0;
+    double ppm = (offset_s / (double)delta_sec) * 1000000.0;
+    return clamp_frequency(ppm);
+}
+
+/* ============================================================================
+ * Frequency discipline state machine
+ * ============================================================================ */
 
 static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp, uint64_t jitter_us) {
     time_t now = time(NULL);
@@ -308,7 +227,7 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
     if (g_freq_state.state == FREQ_STATE_NSET) {
         time_t delta = now - g_freq_state.last_update;
         if (delta >= tc) {
-            // RFC 5905 Section 11.3: FLL for initial frequency estimation
+            /* RFC 5905 Section 11.3: FLL for initial frequency estimation */
             double new_ppm_calc = calculate_fll_ppm(offset_us, delta);
             new_ppm = new_ppm_calc;
             g_freq_state.ppm = new_ppm;
@@ -317,24 +236,24 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
     } else if (g_freq_state.state == FREQ_STATE_FSET) {
         time_t delta = now - g_freq_state.last_update;
         if (delta >= tc) {
-            // RFC 5905 Section 11.3: Transition from FLL to PLL
+            /* RFC 5905 Section 11.3: Transition from FLL to PLL */
             double old_ppm = g_freq_state.ppm;
             double new_ppm_calc = calculate_fll_ppm(offset_us, delta);
-            // FLL gain: new_ppm = old + (new - old) / 2^FLLGAIN
+            /* FLL gain: new_ppm = old + (new - old) / 2^FLLGAIN */
             new_ppm = old_ppm + (new_ppm_calc - old_ppm) / (double)(1 << CLOCK_FLLGAIN);
             g_freq_state.ppm = new_ppm;
             g_freq_state.state = FREQ_STATE_SYNC;
         }
     } else {
-        // FREQ_STATE_SYNC - PLL mode with proper loop filter and gain scheduling
+        /* FREQ_STATE_SYNC - PLL mode with proper loop filter and gain scheduling */
         time_t delta = now - g_freq_state.last_update;
         if (delta >= tc) {
             double old_ppm = g_freq_state.ppm;
             double new_ppm_calc;
 
-            // RFC 5905 Section 11.3: FLL for large poll intervals (tau >= 2048s)
+            /* RFC 5905 Section 11.3: FLL for large poll intervals (tau >= 2048s) */
             if (poll_exp >= 11) {
-                // Use Allan intercept for FLL mode
+                /* Use Allan intercept for FLL mode */
                 double avg_dt = (double)CLOCK_ALLAN_INTERCEPT;
                 if (avg_dt > 0) {
                     new_ppm_calc = ((double)offset_us / 1000000.0) / avg_dt * 1000000.0;
@@ -342,7 +261,7 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
                     new_ppm_calc = 0.0;
                 }
             } else {
-                // PLL mode for small poll intervals
+                /* PLL mode for small poll intervals */
                 time_t avg_dt = delta;
                 if (avg_dt > 0) {
                     new_ppm_calc = calculate_pll_ppm(offset_us, avg_dt);
@@ -351,18 +270,18 @@ static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp,
                 }
             }
 
-            // RFC 5905 Section 11.3: Apply loop filter with dynamic gain
+            /* RFC 5905 Section 11.3: Apply loop filter with dynamic gain */
             double error = new_ppm_calc - old_ppm;
             double filtered_ppm = old_ppm;
 
-            // Update dynamic gains based on jitter
+            /* Update dynamic gains based on jitter */
             update_dynamic_gain(jitter_us);
 
-            // Apply gain scheduling with dynamic gains
+            /* Apply gain scheduling with dynamic gains */
             filtered_ppm = apply_gain_scheduling(error, &old_ppm, g_freq_state.dynamic_pll_gain, FREQ_DEADBAND_PPM, FREQ_MAX_STEP_PPM);
 
-            // Apply loop filter (low-pass)
-            filtered_ppm = apply_loop_filter(filtered_ppm, &g_freq_state.filtered_ppm, PLL_ALPHA);
+            /* Apply loop filter (low-pass) */
+            filtered_ppm = apply_loop_filter(filtered_ppm, &g_freq_state.ppm_filter, PLL_ALPHA);
 
             g_freq_state.ppm = filtered_ppm;
         }
@@ -376,13 +295,106 @@ int update_frequency_discipline(int64_t offset_us, int poll_exp) {
     /* CERT C 3.2.2: Protect against race conditions */
     pthread_mutex_lock(&g_mutex);
 
-    // Get jitter while holding the mutex to avoid double lock
+    /* Get jitter while holding the mutex to avoid double lock */
     uint64_t jitter_us = ntp_offset_jitter_us_locked();
 
     int result = update_frequency_discipline_internal(offset_us, poll_exp, jitter_us);
 
     pthread_mutex_unlock(&g_mutex);
     return result;
+}
+
+/* ============================================================================
+ * Time synchronization
+ * ============================================================================ */
+
+int apply_time_correction_slew_or_step(int64_t offset_us) {
+    /* Check panic condition (RFC 5905 Section 11.3) */
+    if (check_panic_condition(offset_us)) {
+        syslog(LOG_WARNING, "Panic condition detected: time offset %lus exceeds threshold", offset_us / 1000);
+        return -1;
+    }
+
+    if (offset_us > STEP_THRESHOLD_US || offset_us < -STEP_THRESHOLD_US) {
+        struct timespec now_ts;
+        if (clock_gettime(CLOCK_REALTIME, &now_ts) != 0) { return -1; }
+
+        int64_t offset_ns = offset_us * 1000LL;
+        int64_t ns = (int64_t)now_ts.tv_sec * 1000000000LL + (int64_t)now_ts.tv_nsec;
+
+        if (offset_ns > 0 && ns > INT64_MAX - offset_ns) {
+            syslog(LOG_ERR, "Integer overflow in time correction");
+            return -1;
+        }
+        if (offset_ns < 0 && ns < INT64_MIN - offset_ns) {
+            syslog(LOG_ERR, "Integer overflow in time correction");
+            return -1;
+        }
+
+        ns += offset_ns;
+        struct timespec new_ts;
+        new_ts.tv_sec = (time_t)(ns / 1000000000LL);
+        new_ts.tv_nsec = (long)(ns % 1000000000LL);
+        if (new_ts.tv_nsec < 0) {
+            new_ts.tv_nsec += 1000000000L;
+            new_ts.tv_sec -= 1;
+        }
+        return clock_settime(CLOCK_REALTIME, &new_ts);
+    }
+
+    struct timeval delta;
+    delta.tv_sec = (time_t)(offset_us / 1000000LL);
+    delta.tv_usec = (suseconds_t)(offset_us % 1000000LL);
+    if (delta.tv_usec < 0) {
+        delta.tv_usec += 1000000;
+        delta.tv_sec -= 1;
+    }
+    return adjtime(&delta, NULL);
+}
+
+NtpTimestamp ntp_timestamp_now(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) < 0) {
+        syslog(LOG_ERR, "Ошибка получения времени: %s", strerror(errno));
+        NtpTimestamp z = {0, 0};
+        return z;
+    }
+    uint64_t sec = (uint64_t)ts.tv_sec + (uint64_t)NTP_UNIX_EPOCH_DELTA;
+    NtpTimestamp t = {0, 0};
+    if (sec > UINT32_MAX) {
+        t.sec = UINT32_MAX;
+        t.frac = UINT32_MAX;
+        return t;
+    }
+    t.sec = (uint32_t)sec;
+    uint64_t frac = ((uint64_t)ts.tv_nsec << 32) / 1000000000ULL;
+    t.frac = (uint32_t)frac;
+    return t;
+}
+
+int8_t get_system_precision(void) {
+    struct timespec ts;
+    if (clock_getres(CLOCK_REALTIME, &ts) == 0) {
+        if (ts.tv_sec == 0 && ts.tv_nsec == 0) { return -20; }
+        if (ts.tv_sec > 0) {
+            int8_t p = 0;
+            time_t s = ts.tv_sec;
+            while (s > 0) {
+                p++;
+                s >>= 1;
+            }
+            return (p > 6) ? 6 : -p;
+        }
+        int64_t ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+        if (ns <= 0) { return -20; }
+        int8_t p = 0;
+        while (ns < 1000000000LL) {
+            p--;
+            ns <<= 1;
+        }
+        return p;
+    }
+    return -20;
 }
 
 int sync_ntp_time(const char* ip, const char* port) {
@@ -517,8 +529,7 @@ int sync_ntp_time(const char* ip, const char* port) {
                         return -1;
                     }
 
-                    /* RFC 5905 Section 11.3: Do not step if offset exceeds MAXDIST (1
-                     * sec) */
+                    /* RFC 5905 Section 11.3: Do not step if offset exceeds MAXDIST (1 sec) */
                     int64_t abs_offset_us = (offset_us >= 0) ? offset_us : -offset_us;
                     if (abs_offset_us > MAXDIST) {
                         syslog(LOG_WARNING, "Пропуск коррекции: смещение слишком большое (%" PRId64 " мкс > %d мкс)", offset_us, MAXDIST);
@@ -530,8 +541,7 @@ int sync_ntp_time(const char* ip, const char* port) {
                         return -1;
                     }
 
-                    /* RFC 5905 Section 11.3: Check for excessive delay (Bogus packet
-                     * detection) */
+                    /* RFC 5905 Section 11.3: Check for excessive delay (Bogus packet detection) */
                     if (delay_us > MAXDIST * 10) {
                         syslog(LOG_WARNING, "Пропуск коррекции: задержка слишком большая (%" PRIu64 " мкс)", delay_us);
                         pthread_mutex_lock(&g_mutex);

@@ -1,5 +1,5 @@
+#include "socket.h"
 #include "mode_handler.h"
-#include "network.h"
 #include "network4.h"
 #include "network6.h"
 #include "ntpd.h"
@@ -57,7 +57,11 @@ int get_sync_socket(void) {
         return -1;
     }
 
-    network4_enable_reuseaddr(g_sync_sock);
+    if (g_cli.family_preference == 2) {
+        network6_enable_reuseaddr(g_sync_sock);
+    } else {
+        network4_enable_reuseaddr(g_sync_sock);
+    }
 
     syslog(LOG_DEBUG, "Sync socket created with ephemeral port (RFC 9109)");
 
@@ -71,27 +75,38 @@ int create_udp_socket(int port) {
     }
 
     int sock;
-    if (g_cli.family_preference == 2) {
+    int ret;
+
+    if (g_cli.family_preference == NETWORK_FAMILY_IPV6_ONLY) {
         sock = network6_create_socket((uint16_t)port);
+        if (sock < 0) {
+            syslog(LOG_ERR, "Ошибка создания IPv6 сокета: %s", strerror(errno));
+            return -1;
+        }
+        ret = network6_bind_socket(sock, g_cli.interface, (uint16_t)port);
+    } else if (g_cli.family_preference == NETWORK_FAMILY_DUAL_STACK) {
+        sock = network4_create_socket((uint16_t)port);
+        if (sock < 0) {
+            syslog(LOG_ERR, "Ошибка создания IPv4 сокета: %s", strerror(errno));
+            return -1;
+        }
+        ret = network4_bind_socket(sock, g_cli.interface, (uint16_t)port);
     } else {
         sock = network4_create_socket((uint16_t)port);
-    }
-
-    if (sock < 0) {
-        syslog(LOG_ERR, "Ошибка создания сокета: %s", strerror(errno));
-        return -1;
-    }
-
-    int ret;
-    if (g_cli.family_preference == 2) {
-        ret = network6_bind_socket(sock, g_cli.interface, (uint16_t)port);
-    } else {
+        if (sock < 0) {
+            syslog(LOG_ERR, "Ошибка создания сокета: %s", strerror(errno));
+            return -1;
+        }
         ret = network4_bind_socket(sock, g_cli.interface, (uint16_t)port);
     }
 
     if (ret < 0) {
         syslog(LOG_ERR, "Ошибка привязки сокета: %s", strerror(errno));
-        close_socket(sock);
+        if (g_cli.family_preference == NETWORK_FAMILY_IPV6_ONLY) {
+            network6_close_socket(sock);
+        } else {
+            network4_close_socket(sock);
+        }
         return -1;
     }
 
@@ -124,13 +139,13 @@ int create_tcp_socket(int port) {
 
     if (network4_bind_to_port(sock, (uint16_t)port) < 0) {
         syslog(LOG_ERR, "Ошибка привязки TCP сокета: %s", strerror(errno));
-        close(sock);
+        network4_close_socket(sock);
         return -1;
     }
 
     if (listen(sock, 5) < 0) {
         syslog(LOG_ERR, "Ошибка listen на TCP сокете: %s", strerror(errno));
-        close(sock);
+        network4_close_socket(sock);
         return -1;
     }
 

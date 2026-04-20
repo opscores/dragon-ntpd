@@ -7,6 +7,7 @@
 
 #include "ido.h"
 #include "mode_handler.h"
+#include "socket.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -33,6 +34,14 @@
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
+
+#ifndef SSIZE_MAX
+#define SSIZE_MAX ((ssize_t)(SIZE_MAX / 2))
+#endif
+
+#ifndef TCP_NODELAY
+#define TCP_NODELAY 1
+#endif
 
 #ifndef IFNAMSZ
 #define IFNAMSZ 16
@@ -67,6 +76,10 @@
 #define DEFAULT_LOG_FILE "/var/log/dntpd.log"
 #define SYNC_RETRY_INTERVAL_SEC 15
 #define DEFAULT_NTPQ_PORT 323
+
+/* Buffer constants */
+#define MIN_BUFFER_SIZE 1024
+#define MAX_BUFFER_SIZE (4 * 1024 * 1024)
 
 /* Jitter thresholds (RFC 5905 Section 11.2.1) */
 #define JITTER_THRESHOLD_US 100000 /* 100ms - exclude high-jitter peers */
@@ -156,7 +169,7 @@ typedef struct {
     char port[16];
 } PeerRequestData;
 
-/* RFC 5905 Section 11.3 - Clock Discipline State */
+/* Clock discipline states */
 typedef struct {
     double ppm;
     time_t last_update;
@@ -237,8 +250,11 @@ extern IdoState g_ido_state; /* I-DO state (RFC 5905 Section 8.4) */
 
 extern CliConfig g_cli;
 
-extern int g_sync_sock;
 extern pthread_mutex_t g_mutex;
+
+/* Network utility functions */
+uint16_t nport(uint16_t port);
+int npton(uint16_t port, char* buf, size_t buf_size);
 
 void print_usage(const char* prog);
 void print_version(void);
@@ -274,27 +290,26 @@ uint64_t marx_median(uint64_t* arr, int count);
 int marx_filter_outliers(NtpSample* samples, int count, int k);
 uint64_t ntp_offset_jitter_us_locked(void);
 
-NtpTimestamp ntp_timestamp_now(void);
-int8_t get_system_precision(void);
-int apply_time_correction_slew_or_step(int64_t offset_us);
-int sync_ntp_time(const char* ip, const char* port);
-
-/* RFC 5905 Section 11.3 - Frequency Adjustment */
+/* ============================================================================
+ * Time synchronization (RFC 5905 Section 11.3)
+ * ============================================================================ */
+/* Frequency discipline */
 int init_frequency_discipline(void);
 int load_frequency_persistent(void);
 int save_frequency_persistent(void);
+int apply_frequency_adjustment(double ppm);
+int update_frequency_discipline(int64_t offset_us, int poll_exp);
+double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec);
 
-int create_udp_socket(int port);
-void close_socket(int sock);
-int get_sync_socket(void);
-void handle_client_request(const void* buffer, size_t size, const char* ip, const char* port);
+/* Time correction */
+int apply_time_correction_slew_or_step(int64_t offset_us);
+int sync_ntp_time(const char* ip, const char* port);
+NtpTimestamp ntp_timestamp_now(void);
+int8_t get_system_precision(void);
 
-/* TCP ntpq listener (RFC 5905 Section 6) */
-int create_tcp_socket(int port);
-int get_tcp_socket(void);
-int start_tcp_listener(void);
-void stop_tcp_listener(void);
-int start_ntpq_thread(void);
+/* ============================================================================
+ * Network functions - now in socket.h
+ * ============================================================================ */
 
 /* Threads functions (RFC 5905 Section 5) */
 int start_clock_thread(int interval_sec);

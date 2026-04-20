@@ -1,8 +1,11 @@
 /*
  * network4.c - IPv4 network operations for NTP daemon
  *
- * Implements IPv4-specific network functions.
- * Part of RFC 5905 compliance for NTP packet handling.
+ * Optimized IPv4-specific network functions:
+ * - Socket creation and binding
+ * - UDP packet send/receive
+ * - Address parsing and formatting
+ * - RFC 5905 compliance
  *
  * Author: DNTPD Development Team
  * License: BSD-style

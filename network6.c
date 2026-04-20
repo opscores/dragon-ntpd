@@ -1,9 +1,12 @@
 /*
  * network6.c - IPv6 network operations for NTP daemon
  *
- * Implements IPv6-specific network functions.
- * Part of RFC 5905 compliance for NTP packet handling.
- * Includes multicast support (MLDv2).
+ * Optimized IPv6-specific network functions:
+ * - Socket creation and binding
+ * - UDP packet send/receive
+ * - Address parsing and formatting
+ * - Multicast group management (MLDv2)
+ * - RFC 5905 compliance
  *
  * Author: DNTPD Development Team
  * License: BSD-style
