@@ -7,22 +7,6 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#define NTP_MODE_MASK 0x07
-#define NTP_MODE_CLIENT 3
-#define NTP_MODE_SERVER 4
-#define NTP_MODE_SYMMETRIC_ACTIVE 1
-#define NTP_MODE_SYMMETRIC_PASSIVE 2
-#define NTP_MODE_BROADCAST 5
-#define NTP_MODE_CONTROL 6
-#define NTP_MODE_PRIVATE 7
-
-#define NTP_LI_MASK 0xC0
-#define NTP_LI_SHIFT 6
-
-#define NTP_VN_MASK 0x38
-#define NTP_VN_SHIFT 3
-#define NTP_VN_4 4
-
 #define NTP_STRATUM_UNSYNC 16
 #define NTP_LI_ALARM 3
 #define NTP_REF_ID_INIT 0
