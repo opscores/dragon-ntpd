@@ -24,7 +24,8 @@
  * - Check for buffer overflows
  * - Check for integer overflows
  * - Use safe string functions
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /* Leap second state */
 typedef struct {
@@ -48,7 +49,8 @@ static pthread_mutex_t g_leap_second_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* ============================================================================
  * Helper Functions
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * leap_second_get_leap_dir - Get leap second direction from leap indicator
@@ -60,7 +62,8 @@ static pthread_mutex_t g_leap_second_mutex = PTHREAD_MUTEX_INITIALIZER;
  * 2 = -1s (negative leap second)
  * 3 = Not synchronized
  *
- * Return: Leap second direction (LEAP_SECOND_DIR_POSITIVE, LEAP_SECOND_DIR_NEGATIVE, 0)
+ * Return: Leap second direction (LEAP_SECOND_DIR_POSITIVE,
+ * LEAP_SECOND_DIR_NEGATIVE, 0)
  */
 /**
  * leap_second_get_end_of_minute_time - Get time when current minute ends
@@ -126,7 +129,8 @@ static int leap_second_get_current_date(int* year, int* month, int* day) {
 
 /* ============================================================================
  * Leap Second File Handling (RFC 5905 Section 11.4)
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * leap_second_check_file - Check leap second files for imminent events
@@ -221,7 +225,8 @@ int leap_second_check_file(void) {
 
 /**
  * leap_second_schedule_event - Schedule leap second event
- * @leap_dir: Leap second direction (LEAP_SECOND_DIR_POSITIVE or LEAP_SECOND_DIR_NEGATIVE)
+ * @leap_dir: Leap second direction (LEAP_SECOND_DIR_POSITIVE or
+ * LEAP_SECOND_DIR_NEGATIVE)
  * @file_name: Leap second file name
  *
  * RFC 5905 Section 11.4: Schedule correction 60 seconds before end of minute
@@ -229,7 +234,8 @@ int leap_second_check_file(void) {
  * Return: 0 on success, -1 on error
  */
 int leap_second_schedule_event(uint8_t leap_dir, const char* file_name) {
-    (void)file_name; /* Reserved for future use - file-based leap second scheduling */
+    (void)file_name; /* Reserved for future use - file-based leap second
+                        scheduling */
 
     pthread_mutex_lock(&g_leap_second_mutex);
 
@@ -274,11 +280,13 @@ int leap_second_schedule_event(uint8_t leap_dir, const char* file_name) {
 
 /* ============================================================================
  * Leap Second Event Handling
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * leap_second_apply_correction - Apply leap second correction
- * @leap_dir: Leap second direction (LEAP_SECOND_DIR_POSITIVE or LEAP_SECOND_DIR_NEGATIVE)
+ * @leap_dir: Leap second direction (LEAP_SECOND_DIR_POSITIVE or
+ * LEAP_SECOND_DIR_NEGATIVE)
  *
  * RFC 5905 Section 11.4: Apply leap second correction at scheduled time
  *
@@ -329,7 +337,8 @@ int leap_second_apply_correction(uint8_t leap_dir) {
 }
 
 /**
- * leap_second_check_and_apply - Check and apply leap second correction if needed
+ * leap_second_check_and_apply - Check and apply leap second correction if
+ * needed
  *
  * Check if leap second event is due and apply correction if needed.
  *
@@ -361,7 +370,8 @@ int leap_second_check_and_apply(void) {
 
 /* ============================================================================
  * Leap Second Initialization and Cleanup
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * leap_second_init - Initialize leap second handling
@@ -391,8 +401,10 @@ int leap_second_init(void) {
     g_leap_second_state.check_interval_sec = LEAP_SECOND_CHECK_INTERVAL_SEC;
     g_leap_second_state.event_interval_sec = LEAP_SECOND_EVENT_INTERVAL_SEC;
 
-    syslog(LOG_INFO, "Leap second handling initialized: check_interval=%ds, event_interval=%ds", g_leap_second_state.check_interval_sec,
-           g_leap_second_state.event_interval_sec);
+    syslog(LOG_INFO,
+           "Leap second handling initialized: check_interval=%ds, "
+           "event_interval=%ds",
+           g_leap_second_state.check_interval_sec, g_leap_second_state.event_interval_sec);
 
     pthread_mutex_unlock(&g_leap_second_mutex);
 

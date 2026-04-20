@@ -4,7 +4,8 @@
 
 /* ============================================================================
  * Leap Second Handling Integration (RFC 5905 Section 11.4)
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * leap_second_integration_check - Check and apply leap second events
@@ -52,7 +53,8 @@ static int freq_file_read(double* ppm_out) {
 
 /* ============================================================================
  * Frequency discipline state management
- * ============================================================================ */
+ * ============================================================================
+ */
 
 int load_frequency_persistent(void) {
     double ppm = 0.0;
@@ -94,7 +96,8 @@ int init_frequency_discipline(void) {
 
 /* ============================================================================
  * Loop filter utilities
- * ============================================================================ */
+ * ============================================================================
+ */
 
 static double apply_loop_filter(double new_ppm, double* filter_ppm, double alpha) {
     /* CERT C 3.4.5: Check for NULL pointer */
@@ -145,7 +148,8 @@ static void update_dynamic_gain(uint64_t recent_jitter_us) {
 
 /* ============================================================================
  * Frequency adjustment functions
- * ============================================================================ */
+ * ============================================================================
+ */
 
 static int apply_freq_adjtime(double ppm) {
     double adj_sec = ppm / 1000000.0;
@@ -209,7 +213,8 @@ int apply_frequency_adjustment(double ppm) {
 
 /* ============================================================================
  * Frequency calculation functions
- * ============================================================================ */
+ * ============================================================================
+ */
 
 static double calculate_fll_ppm(int64_t offset_us, time_t delta_sec) {
     if (delta_sec <= 0) { return 0.0; }
@@ -238,7 +243,8 @@ double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec) {
 
 /* ============================================================================
  * Frequency discipline state machine
- * ============================================================================ */
+ * ============================================================================
+ */
 
 static int update_frequency_discipline_internal(int64_t offset_us, int poll_exp, uint64_t jitter_us) {
     time_t now = time(NULL);
@@ -328,7 +334,8 @@ int update_frequency_discipline(int64_t offset_us, int poll_exp) {
 
 /* ============================================================================
  * Time synchronization
- * ============================================================================ */
+ * ============================================================================
+ */
 
 int apply_time_correction_slew_or_step(int64_t offset_us) {
     /* Check panic condition (RFC 5905 Section 11.3) */
@@ -482,7 +489,8 @@ int sync_ntp_time(const char* ip, const char* port) {
     ssize_t recv_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&from_addr, &from_len);
 
     if (recv_len > 0) {
-        /* RFC 5905 Section 11.2.1: Multi-server integration - process all peers in pool */
+        /* RFC 5905 Section 11.2.1: Multi-server integration - process all peers in
+         * pool */
         /* Update peer pool state with received packet */
         pthread_mutex_lock(&g_mutex);
         for (int i = 0; i < g_peer_pool_count; i++) {
@@ -551,7 +559,8 @@ int sync_ntp_time(const char* ip, const char* port) {
                         return -1;
                     }
 
-                    /* RFC 5905 Section 11.3: Do not step if offset exceeds MAXDIST (1 sec) */
+                    /* RFC 5905 Section 11.3: Do not step if offset exceeds MAXDIST (1
+                     * sec) */
                     int64_t abs_offset_us = (offset_us >= 0) ? offset_us : -offset_us;
                     if (abs_offset_us > MAXDIST) {
                         syslog(LOG_WARNING, "Пропуск коррекции: смещение слишком большое (%" PRId64 " мкс > %d мкс)", offset_us, MAXDIST);
@@ -563,7 +572,8 @@ int sync_ntp_time(const char* ip, const char* port) {
                         return -1;
                     }
 
-                    /* RFC 5905 Section 11.3: Check for excessive delay (Bogus packet detection) */
+                    /* RFC 5905 Section 11.3: Check for excessive delay (Bogus packet
+                     * detection) */
                     if (delay_us > MAXDIST * 10) {
                         syslog(LOG_WARNING, "Пропуск коррекции: задержка слишком большая (%" PRIu64 " мкс)", delay_us);
                         pthread_mutex_lock(&g_mutex);
@@ -573,12 +583,15 @@ int sync_ntp_time(const char* ip, const char* port) {
                         return -1;
                     }
 
-                    /* RFC 5905 Section 11.2.1: Calculate network quality for peer selection */
+                    /* RFC 5905 Section 11.2.1: Calculate network quality for peer
+                     * selection */
                     uint8_t network_quality = calculate_network_quality(delay_us);
                     syslog(LOG_DEBUG, "Network quality: %u%% (delay=%" PRIu64 " мкс)", network_quality, delay_us);
 
-                    /* RFC 5905 Section 11.2.1: Use compute_system_offset() for Byzantine fault detection */
-                    /* For single peer: use offset directly, for pool: use majority vote */
+                    /* RFC 5905 Section 11.2.1: Use compute_system_offset() for Byzantine
+                     * fault detection */
+                    /* For single peer: use offset directly, for pool: use majority vote
+                     */
                     int best_idx = 0;
                     (void)compute_system_offset(&offset_us, 1, &best_idx); /* Suppress unused variable warning */
                     syslog(LOG_DEBUG, "System offset computed (best_idx=%d)", best_idx);

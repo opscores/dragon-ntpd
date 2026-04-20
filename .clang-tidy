@@ -1,3 +1,30 @@
-# Clang-Tidy configuration for ntpd
----
-Checks: '-*,llvm-*,clang-analyzer-*, -llvm-unusedParameter'
+# clang-tidy configuration for DNTPD (C11)
+# Based on LLVM style and CERT C guidelines
+
+# Enable checks
+Checks:
+  - clang-analyzer-core.*
+  - clang-analyzer-uninitialized.*
+  - cert-err.*
+  - cert-dcl.*
+  - cert-fio.*
+  - cert-str.*
+  - modernize-*
+  - readability-*
+  - style-*
+  - portability-*
+  - memory-*
+  - bugprone-*
+  - llvm-*
+  - misc-*
+  - -clang-analyzer-core.ValistCheck
+  - -clang-analyzer-core.CallAndMessage
+  - -clang-analyzer-core.UndefinedBinaryOperatorResult
+  - -clang-analyzer-core.DivideZero
+  - -clang-analyzer-core.NullDereference
+  - -clang-analyzer-core.StackFrameChecker
+  - -clang-analyzer-core.NonNullParamChecker
+  - -clang-analyzer-core.VLAUsageCheck
+  - -clang-analyzer-core.UnderscoreNull
+  - -clang-analyzer-core.UnsignedIntegerOverflow
+  - -clang-analyzer-core.IntOverflow

@@ -5,7 +5,8 @@ int g_server_count = 0;
 NtpSample g_samples[MAX_SAMPLES];
 int g_sample_count = 0;
 
-/* RFC 5905 Section 11.2.1: Multi-server integration - peer pool for Byzantine fault detection */
+/* RFC 5905 Section 11.2.1: Multi-server integration - peer pool for Byzantine
+ * fault detection */
 PeerState g_peer_pool[MAX_PEERS];
 int g_peer_pool_count = 0;
 
@@ -194,7 +195,8 @@ int load_server_config(void) {
         g_server_count++;
         syslog(LOG_INFO, "Конфигурация загружена: %s:%s", ip_str, port_str);
 
-        /* RFC 5905 Section 11.2.1: Initialize peer pool for Byzantine fault detection */
+        /* RFC 5905 Section 11.2.1: Initialize peer pool for Byzantine fault
+         * detection */
         pthread_mutex_lock(&g_mutex);
         if (g_peer_pool_count < MAX_PEERS) {
             /* CERT C 3.4.5: Use snprintf for bounds-safe string copy */
@@ -354,7 +356,8 @@ int main(int argc, char* argv[]) {
     /* Запуск потока обработки пэеров (RFC 5905 Section 5) */
     int peer_sock = create_udp_socket(NTP_PORT);
     if (peer_sock >= 0) {
-        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer pool */
+        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer pool
+         */
         if (start_peer_thread(peer_sock, "0.0.0.0", "123", NULL, 0) != 0) {
             syslog(LOG_CRIT, "Не удалось запустить поток обработки пэеров");
             close_socket(peer_sock);

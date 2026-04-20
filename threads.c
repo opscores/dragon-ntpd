@@ -44,29 +44,29 @@
  *       sock_cond (не работает с MSG_DONTWAIT)
  */
 typedef struct {
-    int idx;                                     // Индекс в пуле пэеров
-    int sock_fd;                                 // Файловый дескриптор сокетa
-    char ip[INET_ADDRSTRLEN];                    // IP-адрес пэера
-    char port[16];                               // Порт пэера
-    pthread_mutex_t sock_mutex;                  // Мьютекс для сокет-операций
-    struct sockaddr_storage client_addr_storage; // Буфер для адреса клиента
-    socklen_t client_addr_len;                   // Длина адреса клиента
-    PeerState* peer_state;                       // Состояние пэера
-    atomic_bool sock_valid;                      // Флаг валидности сокетa (atomic для signal safety)
+    int idx;                                     // Peer index in peer pool
+    int sock_fd;                                 // Socket file descriptor
+    char ip[INET_ADDRSTRLEN];                    // Peer IP address
+    char port[16];                               // Peer port
+    pthread_mutex_t sock_mutex;                  // Mutex for socket operations
+    struct sockaddr_storage client_addr_storage; // Buffer for client address
+    socklen_t client_addr_len;                   // Client address length
+    PeerState* peer_state;                       // Peer state
+    atomic_bool sock_valid;                      // Socket validity flag (atomic for signal safety)
 } PeerThreadContext;
 
 /**
- * Контекст потока обработки часов
- * Содержит данные для обновления системных часов
+ * Clock thread context
+ * Contains data for updating system clock
  */
 typedef struct {
-    int interval_ms;             /* Интервал обновления в мс */
-    pthread_mutex_t clock_mutex; /* Мьютекс для доступа к часам */
-    pthread_cond_t clock_cond;   /* Условие для пробуждения потока */
-    bool running;                /* Флаг работы потока */
-    pthread_t thread_id;         /* Дескриптор потока */
-    int64_t last_offset_us;      /* Последнее значение коррекции */
-    int last_correction;         /* Последняя коррекция (SLEW/STEP) */
+    int interval_ms;             /* Update interval in ms */
+    pthread_mutex_t clock_mutex; /* Mutex for clock access */
+    pthread_cond_t clock_cond;   /* Condition for waking up thread */
+    bool running;                /* Thread running flag */
+    pthread_t thread_id;         /* Thread descriptor */
+    int64_t last_offset_us;      /* Last correction value */
+    int last_correction;         /* Last correction (SLEW/STEP) */
 } ClockThreadContext;
 
 /* ============================================================================
