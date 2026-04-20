@@ -80,6 +80,22 @@
 #define FREQ_FILE STATE_DIR "/frequency"
 #define FREQ_OFFSET_MAX_PPM 128.0 /* Max frequency offset (PPM) */
 
+/* RFC 5905 Section 11.3 - Loop filter constants */
+#define FLL_ALPHA 0.1                    /* FLL filter coefficient (0.1 = tau = 10x poll) */
+#define PLL_ALPHA 0.01                   /* PLL filter coefficient (0.01 = tau = 100x poll) */
+#define FREQ_DEADBAND_PPM 0.001          /* Deadband for small errors (1 mPPM) */
+#define FREQ_MAX_STEP_PPM 10.0           /* Max PPM step per update (rate limiting) */
+#define PLL_STABLE_COUNT 5               /* PLL stability counter threshold */
+#define FLL_HIGH_GAIN 0.5                /* High FLL gain for recovery */
+#define FLL_LOW_GAIN 0.1                 /* Low FLL gain for stability */
+#define PLL_HIGH_GAIN 0.1                /* High PLL gain for fast convergence */
+#define PLL_NOMINAL_GAIN 0.01            /* Nominal PLL gain (standard) */
+#define PLL_LOW_GAIN 0.001               /* Low PLL gain for stability */
+#define FLL_RECOVERY_THRESHOLD_US 500000 /* Threshold for PLL->FLL transition (500ms) */
+#define PLL_THRESHOLD_US 10000           /* Threshold for FLL->PLL transition (10ms) */
+#define JITTER_HIGH_THRESHOLD_US 200000  /* 200ms - high jitter */
+#define JITTER_LOW_THRESHOLD_US 50000    /* 50ms - low jitter */
+
 #define NTP_LI_MASK 0xC0
 #define NTP_VN_MASK 0x38
 #define NTP_MODE_MASK 0x07
@@ -146,12 +162,34 @@ typedef struct {
     time_t last_update;
     int64_t last_offset_us;
     int state;
+
+    /* RFC 5905 Section 11.3 - Loop filter state */
+    double ppm_filter;         /* Filtered PPM (exponential average) */
+    double ppm_error_history;  /* Error history for integration */
+    time_t last_filter_update; /* Last filter update time */
+
+    /* State machine */
+    int pll_stable_count;   /* PLL stability counter */
+    int fll_recovery_count; /* FLL recovery counter */
+
+    /* Dynamic gain scheduling */
+    double dynamic_pll_gain;   /* Adaptive PLL gain */
+    double dynamic_fll_gain;   /* Adaptive FLL gain */
+    uint64_t recent_jitter_us; /* Recent jitter (for gain adaptation) */
+
+    /* Loop filter state */
+    double filtered_ppm; /* Filtered PPM from loop filter */
+
+    /* Protection */
+    int64_t last_applied_ppm; /* Last applied PPM (for rate limiting) */
+    time_t last_apply_time;   /* Last apply time */
 } FreqState;
 
 /* Clock discipline states */
 #define FREQ_STATE_NSET 0
 #define FREQ_STATE_FSET 1
 #define FREQ_STATE_SYNC 2
+#define FREQ_STATE_RECOVER 3
 
 typedef struct {
     char* config_file;
@@ -245,9 +283,6 @@ int sync_ntp_time(const char* ip, const char* port);
 int init_frequency_discipline(void);
 int load_frequency_persistent(void);
 int save_frequency_persistent(void);
-double calculate_frequency_ppm(int64_t offset_us, time_t delta_sec);
-int apply_frequency_adjustment(double ppm);
-int update_frequency_discipline(int64_t offset_us, int poll_exp);
 
 int create_udp_socket(int port);
 void close_socket(int sock);
