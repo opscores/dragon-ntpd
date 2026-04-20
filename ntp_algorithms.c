@@ -156,7 +156,7 @@ uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum) {
  *
  * Return: System offset (0-15) or 16 on error
  */
-uint8_t compute_system_offset(int64_t* offsets, int count, int* best_idx) {
+uint8_t compute_system_offset(const int64_t* offsets, int count, int* best_idx) {
     if (count < 1 || offsets == NULL) {
         if (best_idx) { *best_idx = 0; }
         return 16; /* No valid peers */
@@ -218,7 +218,7 @@ int select_best_peers(const int64_t* offsets, const uint64_t* jitter, int count,
     if (count > MAX_PEERS) { count = MAX_PEERS; }
 
     /* Step 1: Sort by offset for median calculation */
-    int64_t sorted[MAX_PEERS];
+    static int64_t sorted[MAX_PEERS];
     for (int i = 0; i < count; i++) { sorted[i] = offsets[i]; }
     qsort(sorted, (size_t)count, sizeof(int64_t), compare_int64);
     int64_t median = sorted[count / 2];
@@ -277,7 +277,7 @@ int64_t majority_vote(const int64_t* offsets, int count) {
         sorted[1] = offsets[1];
         return sorted[0] == sorted[1] ? sorted[0] : (sorted[0] + sorted[1]) / 2;
     }
-    int64_t sorted[MAX_PEERS];
+    static int64_t sorted[MAX_PEERS];
     for (int i = 0; i < count && i < MAX_PEERS; i++) { sorted[i] = offsets[i]; }
     qsort(sorted, (size_t)count, sizeof(int64_t), compare_int64);
     int64_t median = sorted[count / 2];

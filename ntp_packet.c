@@ -247,6 +247,10 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
             /* Initialize I-DO state if not initialized */
             if (g_ido_state.ido_state == IDO_STATE_IDLE) { ido_state_init(&g_ido_state); }
 
+            /* Use ido_process_skip() for tracking I-DO fields without full processing */
+            bool ret_skip = ido_process_skip(&g_ido_state, field_type, (uint8_t)(field_len - 4));
+            if (!ret_skip) { syslog(LOG_WARNING, "I-DO skip processing failed"); }
+
             /* Process I-DO Offer/Response */
             if (field_type == NTP_EF_I_DO_OFFER) {
                 bool ret_offer = ido_process(&g_ido_state, NTP_EF_I_DO_OFFER, (uint8_t)(field_len - 4), NULL);

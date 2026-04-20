@@ -177,6 +177,10 @@ extern int g_server_count;
 extern NtpSample g_samples[MAX_SAMPLES];
 extern int g_sample_count;
 
+/* RFC 5905 Section 11.2.1 - Byzantine Fault Detection */
+extern PeerState g_peer_pool[MAX_PEERS];
+extern int g_peer_pool_count;
+
 extern bool g_time_synced;
 extern uint8_t g_local_stratum;
 extern uint32_t g_local_ref_id;
@@ -216,13 +220,15 @@ bool calculate_delay_offset(const NtpTimestamp* t1, const NtpTimestamp* t2, cons
                             int64_t* offset_us);
 bool handle_leap_indicator(uint8_t li);
 uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum);
-uint8_t compute_system_offset(int64_t* offsets, int count, int* best_idx);
+uint8_t compute_system_offset(const int64_t* offsets, int count, int* best_idx);
 int select_best_peers(const int64_t* offsets, const uint64_t* jitter, int count, int* valid_indices, int* valid_count);
 int64_t majority_vote(const int64_t* offsets, int count);
 bool is_false_ticker(int64_t peer_offset, int64_t cluster_offset);
 uint32_t update_root_dispersion(uint32_t current_disp, uint64_t offset_us, uint64_t jitter_us);
 int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us);
 uint32_t ntp_u16_16_from_us(uint64_t us);
+
+uint8_t calculate_network_quality(uint64_t delay_us);
 
 void marx_add_sample_us(uint64_t ts_ns, uint64_t delay_us, int64_t offset_us);
 void marx_remove_sample(int index);

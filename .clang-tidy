@@ -1,3 +1,3 @@
 # Clang-Tidy configuration for ntpd
-
-Checks: -*,+llvm-*,-llvm-unusedParameter,+clang-analyzer-*
+---
+Checks: '-*,llvm-*,clang-analyzer-*, -llvm-unusedParameter'
