@@ -1,6 +1,12 @@
 #include "ido.h"
 #include "ntpd.h"
 
+/* I-DO State Machine Events (RFC 5905 Section 8.4) */
+#define IDO_EVENT_OFFER_RECEIVED (1)
+#define IDO_EVENT_RESPONSE_SENT (2)
+#define IDO_EVENT_AUTH_ESTABLISHED (3)
+#define IDO_EVENT_NEGOTIATION_FAILED (4)
+
 uint32_t read_u32be(const uint8_t* p) {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
 }
@@ -253,8 +259,13 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
             /* Check authentication status (RFC 5905 Section 8.4) */
             if (ido_is_authenticated(&g_ido_state)) { syslog(LOG_INFO, "I-DO: Authentication established"); }
 
-            /* Update state machine */
-            uint8_t ret_state = ido_state_machine(&g_ido_state, IDO_STATE_IDLE);
+            /* Update state machine with appropriate event based on field type */
+            uint8_t ret_state = IDO_STATE_IDLE;
+            if (field_type == NTP_EF_I_DO_OFFER) {
+                ret_state = ido_state_machine(&g_ido_state, IDO_EVENT_OFFER_RECEIVED);
+            } else if (field_type == NTP_EF_I_DO_RESPONSE) {
+                ret_state = ido_state_machine(&g_ido_state, IDO_EVENT_RESPONSE_SENT);
+            }
             (void)ret_state; /* Suppress unused variable warning */
 
             /* Log I-DO state */

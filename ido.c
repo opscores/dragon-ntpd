@@ -147,6 +147,19 @@ bool ido_process_response(IdoState* ido_state, uint16_t ef_type, uint8_t ef_leng
 
 /**
  * Process I-DO extension field (unified interface)
+ *
+ * RFC 5905 §8.4: Unified interface for processing I-DO extension fields:
+ * - type=0x0007: I-DO Offer (server -> client)
+ * - type=0x8007: I-DO Response (client -> server)
+ *
+ * Uses ido_process_offer() and ido_process_response() internally.
+ *
+ * @param ido_state Pointer to IdoState structure
+ * @param ef_type Extension field type
+ * @param ef_length Extension field length
+ * @param ef_data Extension field data
+ *
+ * @return true if extension field processed successfully, false otherwise
  */
 bool ido_process(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
     if (ido_state == NULL || ef_data == NULL) { return false; }
@@ -164,7 +177,13 @@ bool ido_process(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const
  * Process I-DO extension field (skip mode for parsing)
  *
  * Used in skip_extension_fields() to identify I-DO fields
- * without processing them.
+ * without processing them. Updates state machine for tracking.
+ *
+ * @param ido_state Pointer to IdoState structure
+ * @param ef_type Extension field type
+ * @param ef_length Extension field length
+ *
+ * @return true if extension field is valid I-DO, false otherwise
  */
 bool ido_process_skip(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length) {
     /* Validate extension field type */

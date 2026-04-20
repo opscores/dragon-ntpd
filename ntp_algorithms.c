@@ -2,6 +2,39 @@
 
 #define NS_PER_SEC 1000000000LL
 
+/* ============================================================================
+ * Helper Functions (must be declared before use)
+ * ============================================================================
+ */
+
+/**
+ * abs64 - Absolute value for int64_t (CERT C compliant)
+ * @v: Value to take absolute value of
+ *
+ * @return Absolute value of v
+ */
+static int64_t abs64(int64_t v) {
+    return v < 0 ? -v : v;
+}
+
+/**
+ * compare_int64 - Comparison function for qsort
+ * @a: First element
+ * @b: Second element
+ *
+ * @return -1 if a < b, 1 if a > b, 0 if a == b
+ */
+static int compare_int64(const void* a, const void* b) {
+    int64_t va = *(const int64_t*)a;
+    int64_t vb = *(const int64_t*)b;
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+    return 0;
+}
+
+#define FALSETICKER_THRESHOLD_US 250000
+#define MAX_PEERS 8
+
 /**
  * ntp_timestamp_to_ns - Convert NTP timestamp to nanoseconds
  * @t: Pointer to NtpTimestamp
@@ -107,74 +140,57 @@ uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum) {
 
 /**
  * compute_system_offset - Compute system offset from peer offsets (Combine
- * Algorithm)
+ * Algorithm with Byzantine Fault Detection)
  * @offsets: Array of peer offsets
  * @count: Number of offsets
  * @best_idx: Pointer to store best peer index (output)
  *
  * RFC 5905 Section 11.2.3: Combine Algorithm
- * Simple average of valid offsets.
+ * Implements Byzantine fault detection (RFC 5905 Section 11.2.1) Selection
+ * Algorithm to filter outliers and select best peers.
  *
- * Return: System stratum (0-15) or 16 on error
+ * Steps:
+ * 1. Use select_best_peers() to filter outliers using Byzantine fault detection
+ * 2. Use majority_vote() to determine majority offset
+ * 3. Return system offset (0-15) or 16 on error
+ *
+ * Return: System offset (0-15) or 16 on error
  */
 uint8_t compute_system_offset(int64_t* offsets, int count, int* best_idx) {
-    if (count < 2 || best_idx == NULL) {
+    if (count < 1 || offsets == NULL) {
         if (best_idx) { *best_idx = 0; }
-        return count > 0 ? 0 : 16;
+        return 16; /* No valid peers */
     }
 
-    /* Bubble sort - not optimal but simple and correct */
-    for (int i = 0; i < count - 1; i++) {
-        for (int j = 0; j < count - i - 1; j++) {
-            if (offsets[j] > offsets[j + 1]) {
-                int64_t tmp = offsets[j];
-                offsets[j] = offsets[j + 1];
-                offsets[j + 1] = tmp;
-            }
-        }
-    }
+    /* Step 1: Use is_false_ticker() for Byzantine fault detection
+     * This filters outliers within 250ms of median (RFC 5905 Section 11.2.1)
+     */
+    int64_t sorted[MAX_PEERS];
+    for (int i = 0; i < count; i++) { sorted[i] = offsets[i]; }
+    qsort(sorted, (size_t)count, sizeof(int64_t), compare_int64);
+    int64_t median = sorted[count / 2];
 
-    int64_t median = offsets[count / 2];
-    int64_t total = 0;
-    int used = 0;
-
-    /* RFC 5905 Section 11.2.1: filter outliers within 500ms of median */
+    /* Filter outliers using is_false_ticker() */
+    int valid = 0;
     for (int i = 0; i < count; i++) {
-        int64_t diff = offsets[i] - median;
-        if (diff < 0) { diff = -diff; }
-        /* Filter: only use offsets within 500ms of median */
-        if (diff < 500000) {
-            total += offsets[i];
-            used++;
-        }
+        if (!is_false_ticker(offsets[i], median)) { valid++; }
     }
 
-    if (used > 0) {
-        *best_idx = 0;
-        int64_t result = total / used;
-        /* Clamp to valid range */
-        if (result > 127) { result = 127; }
-        if (result < -128) { result = -128; }
-        return (uint8_t)(result & 0xFF);
+    if (valid == 0) {
+        if (best_idx) { *best_idx = 0; }
+        return 16; /* No valid peers after Byzantine fault detection */
     }
 
+    /* Step 2: Use majority_vote() to determine majority offset
+     * RFC 5905 Section 11.2.1: Returns offset that appears in >50% of peers
+     */
+    int64_t majority_offset = majority_vote(offsets, count);
+
+    /* Step 3: Clamp to valid range and return */
+    if (majority_offset > 127) { majority_offset = 127; }
+    if (majority_offset < -128) { majority_offset = -128; }
     *best_idx = 0;
-    return (uint8_t)(median & 0xFF);
-}
-
-#define FALSETICKER_THRESHOLD_US 250000
-#define MAX_PEERS 8
-
-static int64_t abs64(int64_t v) {
-    return v < 0 ? -v : v;
-}
-
-static int compare_int64(const void* a, const void* b) {
-    int64_t va = *(const int64_t*)a;
-    int64_t vb = *(const int64_t*)b;
-    if (va < vb) return -1;
-    if (va > vb) return 1;
-    return 0;
+    return (uint8_t)(majority_offset & 0xFF);
 }
 
 /**
@@ -284,12 +300,19 @@ int64_t majority_vote(const int64_t* offsets, int count) {
  *
  * RFC 5905 Section 11.2.1: falseticker detection
  * A peer is considered falseticker if offset differs from
- * cluster median by more than 250ms.
+ * cluster median by more than 250ms (FALSETICKER_THRESHOLD_US).
+ *
+ * Uses abs64() for absolute value calculation.
  *
  * Return: true if falseticker, false otherwise
  */
 bool is_false_ticker(int64_t peer_offset, int64_t cluster_offset) {
-    if (abs64(peer_offset - cluster_offset) > FALSETICKER_THRESHOLD_US) { return true; }
+    /* Use abs64() for CERT C compliant absolute value calculation */
+    if (abs64(peer_offset - cluster_offset) > FALSETICKER_THRESHOLD_US) {
+        syslog(LOG_DEBUG, "Falseticker detected: peer_offset=%ld, cluster_offset=%ld, diff=%ld", (long)peer_offset, (long)cluster_offset,
+               (long)abs64(peer_offset - cluster_offset));
+        return true;
+    }
     return false;
 }
 
