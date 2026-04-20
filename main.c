@@ -1,3 +1,4 @@
+#define _BSD_SOURCE
 #include "main.h"
 #include "config.h"
 #include "filter.h"
@@ -10,6 +11,12 @@
 #include "socket.h"
 #include "threads.h"
 #include "time_sync.h"
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 ServerConfig* g_servers = NULL;
 int g_server_count = 0;

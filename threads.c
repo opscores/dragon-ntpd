@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 /**
  * threads.c - Многопоточная обработка NTP-пэеров и системных часов
  *
@@ -19,7 +20,14 @@
 #include "ntp_packet.h"
 #include "ntpd.h"
 #include "time_sync.h"
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <pthread.h>
 #include <stdatomic.h> /* C11 atomic operations */
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <time.h>
 
 /* ============================================================================
  * Константы для типов коррекции часов (RFC 5905 Section 5.1)

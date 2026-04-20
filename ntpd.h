@@ -1,7 +1,6 @@
 #ifndef NTPD_H
 #define NTPD_H
 
-#define _DEFAULT_SOURCE
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
