@@ -47,6 +47,9 @@ void cleanup_resources(void) {
     /* Очистка I-DO state (RFC 5905 Section 8.4) */
     ido_state_cleanup(&g_ido_state);
 
+    /* Очистка leap second state (RFC 5905 Section 11.4) */
+    leap_second_cleanup();
+
     /* Очистка mode handler */
     mode_handler_cleanup();
 
@@ -328,6 +331,13 @@ int main(int argc, char* argv[]) {
     /* Инициализация frequency discipline (RFC 5905 Section 11.3) */
     init_frequency_discipline();
     load_frequency_persistent();
+
+    /* Инициализация leap second handling (RFC 5905 Section 11.4) */
+    if (leap_second_init() != 0) {
+        syslog(LOG_WARNING, "Ошибка инициализации leap second handling");
+    } else {
+        syslog(LOG_INFO, "Leap second handling initialized");
+    }
 
     syslog(LOG_NOTICE, "=====================================================================");
     int sync_interval_1 = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;

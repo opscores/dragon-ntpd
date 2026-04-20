@@ -108,16 +108,29 @@ bool calculate_delay_offset(const NtpTimestamp* t1, const NtpTimestamp* t2, cons
  * @li: Leap indicator value (0-3)
  *
  * RFC 5905 Section 7.3.1: Leap indicator values:
- * 0 = No warning, 1 = +1s, 2 = -1s, 3 = Not sync
+ * 0 = No warning
+ * 1 = +1s (positive leap second imminent)
+ * 2 = -1s (negative leap second imminent)
+ * 3 = Not synchronized
  *
- * Return: true if clock should NOT be adjusted, false otherwise
+ * RFC 5905 Section 11.4: Leap second handling:
+ * - LI=0,1,2: Schedule leap second event (return false to allow processing)
+ * - LI=3: Do not process packet (return true to skip correction)
+ *
+ * Return: true if packet should be skipped, false otherwise
  */
 bool handle_leap_indicator(uint8_t li) {
     switch (li) {
     case 0: syslog(LOG_INFO, "Leap Indicator: No warning"); return false;
-    case 1: syslog(LOG_INFO, "Leap Indicator: Last minute 61-62 seconds OK"); return false;
-    case 2: syslog(LOG_WARNING, "Leap Indicator: Last minute 61-62 seconds NOT OK"); return true;
-    case 3: syslog(LOG_WARNING, "Leap Indicator: Last minute not OK - possible clock jump"); return true;
+    case 1:
+        syslog(LOG_INFO, "Leap Indicator: Positive leap second imminent (LI=1)");
+        leap_second_schedule_event(LEAP_SECOND_DIR_POSITIVE, NULL);
+        return false;
+    case 2:
+        syslog(LOG_WARNING, "Leap Indicator: Negative leap second imminent (LI=2)");
+        leap_second_schedule_event(LEAP_SECOND_DIR_NEGATIVE, NULL);
+        return false;
+    case 3: syslog(LOG_WARNING, "Leap Indicator: Clock not synchronized (LI=3)"); return true;
     default: syslog(LOG_ERR, "Invalid Leap Indicator: %d", li); return true;
     }
 }

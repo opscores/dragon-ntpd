@@ -3,8 +3,30 @@
 #include <sys/timex.h>
 
 /* ============================================================================
- * File I/O helpers for frequency persistence
+ * Leap Second Handling Integration (RFC 5905 Section 11.4)
  * ============================================================================ */
+
+/**
+ * leap_second_integration_check - Check and apply leap second events
+ *
+ * Called periodically to check for leap second events and apply corrections.
+ *
+ * Return: 0 on success, -1 on error
+ */
+static int leap_second_integration_check(void) {
+    /* Check leap second files */
+    if (leap_second_check_file() != 0) { return -1; }
+
+    /* Check and apply scheduled events */
+    if (leap_second_check_and_apply() != 0) { return -1; }
+
+    return 0;
+}
+
+/* ============================================================================
+ * File I/O helpers for frequency persistence
+ * ============================================================================
+ */
 
 static int freq_file_write(double ppm) {
     FILE* fp = fopen(FREQ_FILE, "w");
@@ -626,6 +648,13 @@ int sync_ntp_time(const char* ip, const char* port) {
                            "Синхронизация успешно завершена с %s:%s: задержка=%" PRIu64 " мкс, "
                            "страта=%u, смещение=%" PRId64 " мкс",
                            ip, port, delay_us, stratum, offset_us);
+
+                    /* RFC 5905 Section 11.4: Check for leap second events after sync */
+                    if (leap_second_integration_check() == 0) {
+                        syslog(LOG_INFO, "Leap second check completed after sync");
+                    } else {
+                        syslog(LOG_WARNING, "Leap second check failed after sync: %s", strerror(errno));
+                    }
 
                     close_socket(sock);
                     return 0;

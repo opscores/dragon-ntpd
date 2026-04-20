@@ -118,6 +118,19 @@
 #define NTP_VN_4 4
 #define NTP_UNIX_EPOCH_DELTA 2208988800UL
 
+/* ============================================================================
+ * Leap Second Handling (RFC 5905 Section 11.4)
+ * ============================================================================ */
+#define LEAP_SECOND_DIR_POSITIVE 1 /* +1s at end of minute */
+#define LEAP_SECOND_DIR_NEGATIVE 2 /* -1s at end of minute */
+#define LEAP_SECOND_FILE_DIR_POSITIVE 1
+#define LEAP_SECOND_FILE_DIR_NEGATIVE 2
+#define LEAP_SECOND_FILE_DIR "/etc/ntp"
+#define LEAP_SECOND_FILE_PREFIX "leap-"
+#define LEAP_SECOND_FILE_SUFFIX ".s"
+#define LEAP_SECOND_EVENT_INTERVAL_SEC 60
+#define LEAP_SECOND_CHECK_INTERVAL_SEC 300
+
 typedef struct {
     uint32_t sec;
     uint32_t frac;
@@ -273,6 +286,12 @@ int64_t ntp_timestamp_to_ns(const NtpTimestamp* ts);
 bool calculate_delay_offset(const NtpTimestamp* t1, const NtpTimestamp* t2, const NtpTimestamp* t3, const NtpTimestamp* t4, uint64_t* delay_us,
                             int64_t* offset_us);
 bool handle_leap_indicator(uint8_t li);
+int leap_second_init(void);
+int leap_second_cleanup(void);
+int leap_second_check_file(void);
+int leap_second_schedule_event(uint8_t leap_dir, const char* file_name);
+int leap_second_apply_correction(uint8_t leap_dir);
+int leap_second_check_and_apply(void);
 uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum);
 uint8_t compute_system_offset(const int64_t* offsets, int count, int* best_idx);
 int select_best_peers(const int64_t* offsets, const uint64_t* jitter, int count, int* valid_indices, int* valid_count);
