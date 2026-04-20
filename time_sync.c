@@ -360,15 +360,15 @@ int apply_time_correction_slew_or_step(int64_t offset_us) {
         int64_t offset_ns = offset_us * 1000LL;
         int64_t ns = (int64_t)now_ts.tv_sec * 1000000000LL + (int64_t)now_ts.tv_nsec;
 
+        // Check for overflow before addition
         if (offset_ns > 0 && ns > INT64_MAX - offset_ns) {
-            syslog(LOG_ERR, "Integer overflow in time correction");
+            syslog(LOG_ERR, "Integer overflow in time correction: ns=%ld offset=%ld", (long)ns, (long)offset_ns);
             return -1;
         }
         if (offset_ns < 0 && ns < INT64_MIN - offset_ns) {
-            syslog(LOG_ERR, "Integer overflow in time correction");
+            syslog(LOG_ERR, "Integer underflow in time correction: ns=%ld offset=%ld", (long)ns, (long)offset_ns);
             return -1;
         }
-
         ns += offset_ns;
         struct timespec new_ts;
         new_ts.tv_sec = (time_t)(ns / 1000000000LL);
