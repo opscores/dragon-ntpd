@@ -3,6 +3,7 @@
 
 #include "ido.h"
 #include "ntpd.h"
+#include <stdint.h>
 
 /* ============================================================================
  * NTP Packet Parsing Functions (RFC 5905 Section 7.3)

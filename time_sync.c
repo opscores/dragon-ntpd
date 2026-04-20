@@ -12,6 +12,14 @@
 #include <sys/timex.h>
 
 /* ============================================================================
+ * Clock Accuracy State (RFC 5905 Section 7.4)
+ * ============================================================================
+ */
+
+/* RFC 5905 Section 7.4: Clock accuracy state */
+ClockAccuracyState g_clock_accuracy;
+
+/* ============================================================================
  * Leap Second Handling Integration (RFC 5905 Section 11.4)
  * ============================================================================
  */
@@ -829,7 +837,7 @@ double calculate_allan_variance(int64_t offset_us, time_t delta_sec) {
  *
  * Called once during system initialization.
  */
-static void init_clock_accuracy(void) {
+void init_clock_accuracy(void) {
     ClockAccuracyState* state = &g_clock_accuracy;
 
     /* Initialize all fields to zero */
@@ -852,7 +860,7 @@ static void init_clock_accuracy(void) {
  *   offset_us - Time offset in microseconds
  *   delta_sec - Time interval in seconds
  */
-static void update_clock_accuracy(int64_t offset_us, time_t delta_sec) {
+void update_clock_accuracy(int64_t offset_us, time_t delta_sec) {
     ClockAccuracyState* state = &g_clock_accuracy;
 
     /* Calculate precision */

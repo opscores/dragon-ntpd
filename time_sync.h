@@ -2,6 +2,7 @@
 #define TIME_SYNC_H
 
 #include "ntpd.h"
+#include <time.h>
 
 /* ============================================================================
  * RFC 5905 Section 11.3 - Clock Discipline Constants
@@ -76,9 +77,12 @@ uint32_t update_root_dispersion(uint32_t root_disp, uint64_t offset_us, uint64_t
 int8_t adjust_poll_interval(int8_t current_poll, int8_t peer_poll, uint64_t delay_us, int64_t offset_us);
 
 /* ============================================================================
- * RFC 5905 Section 7.4 - Clock Accuracy Estimation Functions
+ * Clock Accuracy State Functions
  * ============================================================================
  */
+
+/* Clock accuracy state (RFC 5905 Section 7.4) */
+extern ClockAccuracyState g_clock_accuracy;
 
 /* Calculate clock precision (ρ) - RFC 5905 Section 6.2 */
 double calculate_clock_precision(void);

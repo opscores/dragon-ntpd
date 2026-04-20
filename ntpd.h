@@ -237,6 +237,21 @@ typedef struct {
 } CliConfig;
 
 /* ============================================================================
+ * RFC 5905 Section 7.4 - Clock Accuracy State
+ * ============================================================================
+ */
+
+typedef struct {
+    double precision;               /* Clock precision (ρ) - RFC 5905 */
+    double resolution;              /* Clock resolution (2^(-p)) */
+    double accuracy_estimate;       /* Clock accuracy estimate */
+    double stability_metric;        /* Clock stability metric (Allan variance) */
+    time_t last_update;             /* Last accuracy update time */
+    uint64_t offset_history[16];    /* Offset history for stability tracking */
+    time_t offset_history_time[16]; /* Corresponding times */
+} ClockAccuracyState;
+
+/* ============================================================================
  * Global Variables
  * ============================================================================
  */
@@ -264,18 +279,6 @@ extern int8_t g_local_precision;
 extern int8_t g_local_poll;
 extern int8_t g_peer_poll;
 extern FreqState g_freq_state;
-
-/* RFC 5905 Section 7.4 - Clock accuracy state */
-extern ClockAccuracyState g_clock_accuracy;
-
-/* Clock accuracy estimation functions */
-double calculate_clock_precision(void);
-double calculate_allan_variance(int64_t offset_us, time_t delta_sec);
-void update_clock_accuracy(int64_t offset_us, time_t delta_sec);
-void init_clock_accuracy(void);
-ClockAccuracyState* get_clock_accuracy_state(void);
-double get_clock_precision(void);
-double get_clock_stability(void);
 
 extern CliConfig g_cli;
 
