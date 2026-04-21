@@ -37,7 +37,7 @@ typedef struct {
     uint64_t jitter_us;      /* Jitter in microseconds */
     uint8_t stratum;         /* Stratum level */
     NtpTimestamp ref_ts;     /* Reference timestamp */
-    uint32_t ref_id;         /* Reference ID */
+    char ref_id[4];          /* Reference ID (RFC 5905: 4-char ASCII string) */
 } ReferenceClockState;
 
 /* ============================================================================

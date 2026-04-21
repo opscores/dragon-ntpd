@@ -56,7 +56,7 @@ int reference_clock_init(void) {
     state->stratum = 16;
 
     /* Set default reference ID */
-    state->ref_id = 0;
+    state->ref_id[0] = '\0';
 
     /* Set default reference timestamp */
     state->ref_ts.sec = 0;
