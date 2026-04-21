@@ -31,6 +31,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "ido.h"
+
 #ifndef SSIZE_MAX
 #define SSIZE_MAX ((ssize_t)(SIZE_MAX / 2))
 #endif
@@ -176,6 +178,8 @@ typedef struct {
     uint32_t root_disp;
     time_t last_update;
     bool reachable;
+    /* RFC 5905 Section 8.4 / RFC 5906: I-DO/Autokey authentication state */
+    IdoState ido_state;
 } PeerState;
 
 typedef struct {
