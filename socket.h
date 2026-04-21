@@ -51,7 +51,11 @@
 #define NETWORK_MAX_BUFFER_SIZE (4 * 1024 * 1024)
 
 /* Address family preference */
-enum { NETWORK_FAMILY_IPV4_ONLY = 0, NETWORK_FAMILY_IPV6_ONLY = 1, NETWORK_FAMILY_DUAL_STACK = 2 };
+enum {
+    NETWORK_FAMILY_IPV4_ONLY = 0,
+    NETWORK_FAMILY_IPV6_ONLY = 1,
+    NETWORK_FAMILY_DUAL_STACK = 2
+};
 
 /* ============================================================================
  * Network Structures
@@ -201,7 +205,8 @@ int get_tcp_socket(void);
  * @param ip Client IP address string
  * @param port Client port string
  */
-void handle_client_request(const void* buffer, size_t size, const char* ip, const char* port);
+void handle_client_request(const void* buffer, size_t size, const char* ip,
+                           const char* port);
 
 /* ============================================================================
  * TCP Listener Management

@@ -40,7 +40,8 @@ typedef struct {
  * ============================================================================
  */
 
-int start_peer_thread(int sock_fd, const char* ip, const char* port, void* peer_state, int idx);
+int start_peer_thread(int sock_fd, const char* ip, const char* port,
+                      void* peer_state, int idx);
 void stop_peer_thread(void);
 void cleanup_peer_thread(void);
 

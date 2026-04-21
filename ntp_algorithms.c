@@ -84,9 +84,11 @@ int64_t ntp_timestamp_to_ns(const NtpTimestamp* t) {
  *
  * Return: true on success, false on error
  */
-bool calculate_delay_offset(const NtpTimestamp* t1, const NtpTimestamp* t2, const NtpTimestamp* t3, const NtpTimestamp* t4, uint64_t* delay_us,
-                            int64_t* offset_us) {
-    if (t1 == NULL || t2 == NULL || t3 == NULL || t4 == NULL || delay_us == NULL || offset_us == NULL) {
+bool calculate_delay_offset(const NtpTimestamp* t1, const NtpTimestamp* t2,
+                            const NtpTimestamp* t3, const NtpTimestamp* t4,
+                            uint64_t* delay_us, int64_t* offset_us) {
+    if (t1 == NULL || t2 == NULL || t3 == NULL || t4 == NULL ||
+        delay_us == NULL || offset_us == NULL) {
         syslog(LOG_WARNING, "NULL указатель при вычислении задержки");
         return false;
     }
@@ -129,14 +131,18 @@ bool handle_leap_indicator(uint8_t li) {
     switch (li) {
     case 0: syslog(LOG_INFO, "Leap Indicator: No warning"); return false;
     case 1:
-        syslog(LOG_INFO, "Leap Indicator: Positive leap second imminent (LI=1)");
+        syslog(LOG_INFO,
+               "Leap Indicator: Positive leap second imminent (LI=1)");
         leap_second_schedule_event(LEAP_SECOND_DIR_POSITIVE, NULL);
         return false;
     case 2:
-        syslog(LOG_WARNING, "Leap Indicator: Negative leap second imminent (LI=2)");
+        syslog(LOG_WARNING,
+               "Leap Indicator: Negative leap second imminent (LI=2)");
         leap_second_schedule_event(LEAP_SECOND_DIR_NEGATIVE, NULL);
         return false;
-    case 3: syslog(LOG_WARNING, "Leap Indicator: Clock not synchronized (LI=3)"); return true;
+    case 3:
+        syslog(LOG_WARNING, "Leap Indicator: Clock not synchronized (LI=3)");
+        return true;
     default: syslog(LOG_ERR, "Invalid Leap Indicator: %d", li); return true;
     }
 }
@@ -175,7 +181,8 @@ uint8_t ntp_local_stratum_from_peer(uint8_t peer_stratum) {
  *
  * Return: System offset (0-15) or 16 on error
  */
-uint8_t compute_system_offset(const int64_t* offsets, int count, int* best_idx) {
+uint8_t compute_system_offset(const int64_t* offsets, int count,
+                              int* best_idx) {
     if (count < 1 || offsets == NULL) {
         if (best_idx) { *best_idx = 0; }
         return 16; /* No valid peers */
@@ -229,8 +236,10 @@ uint8_t compute_system_offset(const int64_t* offsets, int count, int* best_idx) 
  *
  * Return: 0 on success, -1 on error
  */
-int select_best_peers(const int64_t* offsets, const uint64_t* jitter, int count, int* valid_indices, int* valid_count) {
-    if (count < 1 || offsets == NULL || valid_indices == NULL || valid_count == NULL) {
+int select_best_peers(const int64_t* offsets, const uint64_t* jitter, int count,
+                      int* valid_indices, int* valid_count) {
+    if (count < 1 || offsets == NULL || valid_indices == NULL ||
+        valid_count == NULL) {
         if (valid_count) *valid_count = 0;
         return -1;
     }
@@ -328,7 +337,10 @@ int64_t majority_vote(const int64_t* offsets, int count) {
 bool is_false_ticker(int64_t peer_offset, int64_t cluster_offset) {
     /* Use abs64() for CERT C compliant absolute value calculation */
     if (abs64(peer_offset - cluster_offset) > FALSETICKER_THRESHOLD_US) {
-        syslog(LOG_DEBUG, "Falseticker detected: peer_offset=%ld, cluster_offset=%ld, diff=%ld", (long)peer_offset, (long)cluster_offset,
+        syslog(LOG_DEBUG,
+               "Falseticker detected: peer_offset=%ld, cluster_offset=%ld, "
+               "diff=%ld",
+               (long)peer_offset, (long)cluster_offset,
                (long)abs64(peer_offset - cluster_offset));
         return true;
     }

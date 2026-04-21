@@ -36,7 +36,13 @@
 #include <stdint.h>
 
 /* I-DO/Autokey State Machine States */
-typedef enum { IDO_STATE_IDLE = 0, IDO_STATE_OFFER_RECEIVED, IDO_STATE_RESPONSE_SENT, IDO_STATE_AUTHENTICATED, IDO_STATE_REJECTED } IdoState_t;
+typedef enum {
+    IDO_STATE_IDLE = 0,
+    IDO_STATE_OFFER_RECEIVED,
+    IDO_STATE_RESPONSE_SENT,
+    IDO_STATE_AUTHENTICATED,
+    IDO_STATE_REJECTED
+} IdoState_t;
 
 /* I-DO/Autokey Capability Flags */
 #define IDO_CAP_OFFER (0x01)    /* Peer offers authentication */
@@ -108,7 +114,8 @@ void ido_state_cleanup(IdoState* ido_state);
  *
  * Returns true if offer processed successfully, false otherwise
  */
-bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
+                       const uint8_t* ef_data);
 
 /**
  * Process I-DO Response extension field
@@ -126,7 +133,8 @@ bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
  *
  * Returns true if response processed successfully, false otherwise
  */
-bool ido_process_response(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool ido_process_response(IdoState* ido_state, uint16_t ef_type,
+                          uint8_t ef_length, const uint8_t* ef_data);
 
 /**
  * Process I-DO extension field (unified interface)
@@ -141,7 +149,8 @@ bool ido_process_response(IdoState* ido_state, uint16_t ef_type, uint8_t ef_leng
  *
  * Returns true if extension field processed successfully, false otherwise
  */
-bool ido_process(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool ido_process(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
+                 const uint8_t* ef_data);
 
 /**
  * Process I-DO extension field (skip mode for parsing)

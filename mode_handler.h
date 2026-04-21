@@ -18,7 +18,8 @@
 #define ACL_FLAG_NOTRUST (1 << 4)
 #define ACL_FLAG_KOD (1 << 5)
 
-#define DEFAULT_ACL_FLAGS (ACL_FLAG_NOQUERY | ACL_FLAG_NOSERVE | ACL_FLAG_LIMITED)
+#define DEFAULT_ACL_FLAGS                                                      \
+    (ACL_FLAG_NOQUERY | ACL_FLAG_NOSERVE | ACL_FLAG_LIMITED)
 
 #define DEFAULT_RATE_LIMIT_INTERVAL 2
 #define DEFAULT_MAX_RESPONSE_RATIO 1.0f

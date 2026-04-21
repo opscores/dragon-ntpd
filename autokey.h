@@ -107,7 +107,8 @@ void autokey_cleanup_state(AutokeyState* state);
  * @param ef_data Extension field data
  * @return true if offer processed successfully, false otherwise
  */
-bool autokey_process_offer(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool autokey_process_offer(AutokeyState* state, uint16_t ef_type,
+                           uint8_t ef_length, const uint8_t* ef_data);
 
 /**
  * Process Autokey Response extension field
@@ -117,7 +118,8 @@ bool autokey_process_offer(AutokeyState* state, uint16_t ef_type, uint8_t ef_len
  * @param ef_data Extension field data
  * @return true if response processed successfully, false otherwise
  */
-bool autokey_process_response(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool autokey_process_response(AutokeyState* state, uint16_t ef_type,
+                              uint8_t ef_length, const uint8_t* ef_data);
 
 /**
  * Process Autokey extension field (unified interface)
@@ -127,7 +129,8 @@ bool autokey_process_response(AutokeyState* state, uint16_t ef_type, uint8_t ef_
  * @param ef_data Extension field data
  * @return true if extension field processed successfully, false otherwise
  */
-bool autokey_process(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool autokey_process(AutokeyState* state, uint16_t ef_type, uint8_t ef_length,
+                     const uint8_t* ef_data);
 
 /**
  * Process Autokey extension field (skip mode for parsing)
@@ -136,7 +139,8 @@ bool autokey_process(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, c
  * @param ef_length Extension field length
  * @return true if extension field is valid Autokey, false otherwise
  */
-bool autokey_process_skip(AutokeyState* state, uint16_t ef_type, uint8_t ef_length);
+bool autokey_process_skip(AutokeyState* state, uint16_t ef_type,
+                          uint8_t ef_length);
 
 /**
  * State machine transition handler
@@ -187,7 +191,8 @@ const char* autokey_capability_name(uint8_t flag);
  * @param digest Output buffer (20 bytes)
  * @return 0 on success, -1 on error
  */
-int autokey_compute_hmac(const uint8_t* data, size_t data_len, const uint8_t* key, size_t key_len, uint8_t* digest);
+int autokey_compute_hmac(const uint8_t* data, size_t data_len,
+                         const uint8_t* key, size_t key_len, uint8_t* digest);
 
 /**
  * Compute MAC for NTP packet
@@ -232,7 +237,8 @@ void autokey_cleanup(void);
  * @param key Key material (20 bytes)
  * @return 0 on success, -1 on error
  */
-int autokey_install_key(AutokeyState* state, uint32_t key_id, const uint8_t* key);
+int autokey_install_key(AutokeyState* state, uint32_t key_id,
+                        const uint8_t* key);
 
 /**
  * Rotate key (RFC 5906 Section 3.4.3b)
@@ -241,7 +247,8 @@ int autokey_install_key(AutokeyState* state, uint32_t key_id, const uint8_t* key
  * @param new_key New key material (20 bytes)
  * @return 0 on success, -1 on error
  */
-int autokey_rotate_key(AutokeyState* state, uint32_t new_key_id, const uint8_t* new_key);
+int autokey_rotate_key(AutokeyState* state, uint32_t new_key_id,
+                       const uint8_t* new_key);
 
 /**
  * Revoke key (RFC 5906 Section 3.4.3c)
@@ -259,7 +266,8 @@ int autokey_revoke_key(AutokeyState* state, uint32_t key_id);
  * @param ef_data Extension field data
  * @return true if processed successfully, false otherwise
  */
-bool autokey_process_key_install(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool autokey_process_key_install(AutokeyState* state, uint16_t ef_type,
+                                 uint8_t ef_length, const uint8_t* ef_data);
 
 /**
  * Process Autokey Key Rotate extension field
@@ -269,7 +277,8 @@ bool autokey_process_key_install(AutokeyState* state, uint16_t ef_type, uint8_t 
  * @param ef_data Extension field data
  * @return true if processed successfully, false otherwise
  */
-bool autokey_process_key_rotate(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool autokey_process_key_rotate(AutokeyState* state, uint16_t ef_type,
+                                uint8_t ef_length, const uint8_t* ef_data);
 
 /**
  * Process Autokey Key Revoke extension field
@@ -279,7 +288,8 @@ bool autokey_process_key_rotate(AutokeyState* state, uint16_t ef_type, uint8_t e
  * @param ef_data Extension field data
  * @return true if processed successfully, false otherwise
  */
-bool autokey_process_key_revoke(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+bool autokey_process_key_revoke(AutokeyState* state, uint16_t ef_type,
+                                uint8_t ef_length, const uint8_t* ef_data);
 
 /* ============================================================================
  * Global Variables

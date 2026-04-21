@@ -38,7 +38,8 @@ void marx_remove_sample(int index) {
     if (index >= 0 && index < g_sample_count) {
         pthread_mutex_lock(&g_mutex);
         const size_t move_count = (size_t)(g_sample_count - index - 1);
-        memmove(&g_samples[index], &g_samples[index + 1], move_count * sizeof(NtpSample));
+        memmove(&g_samples[index], &g_samples[index + 1],
+                move_count * sizeof(NtpSample));
         g_sample_count--;
         pthread_mutex_unlock(&g_mutex);
     }
@@ -94,7 +95,10 @@ int marx_filter_outliers(NtpSample* samples, int count, int k) {
     uint64_t median = marx_median(delays, count);
 
     uint64_t abs_devs[MAX_SAMPLES];
-    for (int i = 0; i < count; i++) { abs_devs[i] = (samples[i].delay > median) ? (samples[i].delay - median) : (median - samples[i].delay); }
+    for (int i = 0; i < count; i++) {
+        abs_devs[i] = (samples[i].delay > median) ? (samples[i].delay - median)
+                                                  : (median - samples[i].delay);
+    }
     uint64_t mad = marx_median(abs_devs, count);
 
     uint64_t kmad;
@@ -160,7 +164,9 @@ uint64_t ntp_offset_jitter_us_locked(void) {
     }
 
     long double mean = 0.0L;
-    for (int i = 0; i < g_sample_count; i++) { mean += (long double)g_samples[i].offset; }
+    for (int i = 0; i < g_sample_count; i++) {
+        mean += (long double)g_samples[i].offset;
+    }
     mean /= (long double)g_sample_count;
 
     long double var = 0.0L;

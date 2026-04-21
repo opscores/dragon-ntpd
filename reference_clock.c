@@ -202,7 +202,9 @@ int reference_clock_check(void) {
         if (llabs(offset_us) < 1000000) { /* 1 second threshold */
             /* Apply time correction */
             int result = apply_time_correction_slew_or_step(offset_us);
-            if (result != 0) { syslog(LOG_WARNING, "Failed to apply time correction"); }
+            if (result != 0) {
+                syslog(LOG_WARNING, "Failed to apply time correction");
+            }
         }
     }
 

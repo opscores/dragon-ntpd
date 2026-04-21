@@ -89,7 +89,8 @@ static time_t leap_second_get_end_of_minute_time(void) {
  *
  * Return: 0 on success, -1 on error
  */
-static int leap_second_get_file_name(int year, int month, int day, char* buf, size_t buf_size) {
+static int leap_second_get_file_name(int year, int month, int day, char* buf,
+                                     size_t buf_size) {
     if (buf == NULL || buf_size == 0) { return -1; }
 
     /* Format: leap-YYYYMMDD.s */
@@ -102,7 +103,9 @@ static int leap_second_get_file_name(int year, int month, int day, char* buf, si
 
     if (year_digits > 4) { return -1; /* Year too large */ }
 
-    snprintf(buf, buf_size, "%sleap-%04d%02d%02d%s", g_leap_second_state.leap_file_dir, year, month, day, g_leap_second_state.leap_file_suffix);
+    snprintf(buf, buf_size, "%sleap-%04d%02d%02d%s",
+             g_leap_second_state.leap_file_dir, year, month, day,
+             g_leap_second_state.leap_file_suffix);
 
     return 0;
 }
@@ -154,8 +157,11 @@ int leap_second_check_file(void) {
 
     /* Check if enough time has passed since last check */
     time_t now = time(NULL);
-    if (now - g_leap_second_state.last_check_time < g_leap_second_state.check_interval_sec) {
-        syslog(LOG_DEBUG, "Leap second check: not enough time passed (%ds < %ds)", (int)(now - g_leap_second_state.last_check_time),
+    if (now - g_leap_second_state.last_check_time <
+        g_leap_second_state.check_interval_sec) {
+        syslog(LOG_DEBUG,
+               "Leap second check: not enough time passed (%ds < %ds)",
+               (int)(now - g_leap_second_state.last_check_time),
                g_leap_second_state.check_interval_sec);
         pthread_mutex_unlock(&g_leap_second_mutex);
         return 0;
@@ -171,7 +177,8 @@ int leap_second_check_file(void) {
 
     /* Get leap second file name */
     char file_name[256];
-    if (leap_second_get_file_name(year, month, day, file_name, sizeof(file_name)) != 0) {
+    if (leap_second_get_file_name(year, month, day, file_name,
+                                  sizeof(file_name)) != 0) {
         syslog(LOG_ERR, "Leap second check: failed to get file name");
         pthread_mutex_unlock(&g_leap_second_mutex);
         return -1;
@@ -185,14 +192,18 @@ int leap_second_check_file(void) {
         /* Read leap second direction from file */
         FILE* fp = fopen(file_name, "r");
         if (fp == NULL) {
-            syslog(LOG_ERR, "Leap second check: failed to open file: %s", file_name);
+            syslog(LOG_ERR, "Leap second check: failed to open file: %s",
+                   file_name);
             pthread_mutex_unlock(&g_leap_second_mutex);
             return -1;
         }
 
         uint8_t leap_dir;
         if (fscanf(fp, "%hhu", &leap_dir) != 1) {
-            syslog(LOG_ERR, "Leap second check: failed to read leap direction from file: %s", file_name);
+            syslog(LOG_ERR,
+                   "Leap second check: failed to read leap direction from "
+                   "file: %s",
+                   file_name);
             fclose(fp);
             pthread_mutex_unlock(&g_leap_second_mutex);
             return -1;
@@ -201,21 +212,31 @@ int leap_second_check_file(void) {
         fclose(fp);
 
         /* Validate leap second direction */
-        if (leap_dir != LEAP_SECOND_DIR_POSITIVE && leap_dir != LEAP_SECOND_DIR_NEGATIVE) {
-            syslog(LOG_ERR, "Leap second check: invalid leap direction in file: %s (value=%hhu)", file_name, leap_dir);
+        if (leap_dir != LEAP_SECOND_DIR_POSITIVE &&
+            leap_dir != LEAP_SECOND_DIR_NEGATIVE) {
+            syslog(LOG_ERR,
+                   "Leap second check: invalid leap direction in file: %s "
+                   "(value=%hhu)",
+                   file_name, leap_dir);
             pthread_mutex_unlock(&g_leap_second_mutex);
             return -1;
         }
 
         /* Schedule leap second event */
         if (leap_second_schedule_event(leap_dir, file_name) == 0) {
-            syslog(LOG_INFO, "Leap second event scheduled: %s at %ld seconds from now", leap_dir == LEAP_SECOND_DIR_POSITIVE ? "positive" : "negative",
+            syslog(LOG_INFO,
+                   "Leap second event scheduled: %s at %ld seconds from now",
+                   leap_dir == LEAP_SECOND_DIR_POSITIVE ? "positive"
+                                                        : "negative",
                    g_leap_second_state.event_time - now);
         } else {
             syslog(LOG_ERR, "Leap second check: failed to schedule event");
         }
     } else {
-        syslog(LOG_DEBUG, "Leap second check: no leap second file found for %04d-%02d-%02d", year, month, day);
+        syslog(
+            LOG_DEBUG,
+            "Leap second check: no leap second file found for %04d-%02d-%02d",
+            year, month, day);
     }
 
     /* Update last check time */
@@ -251,7 +272,8 @@ int leap_second_schedule_event(uint8_t leap_dir, const char* file_name) {
     /* Get end of minute time */
     time_t end_of_minute = leap_second_get_end_of_minute_time();
     if (end_of_minute == 0) {
-        syslog(LOG_ERR, "Leap second schedule: failed to get end of minute time");
+        syslog(LOG_ERR,
+               "Leap second schedule: failed to get end of minute time");
         pthread_mutex_unlock(&g_leap_second_mutex);
         return -1;
     }
@@ -261,19 +283,27 @@ int leap_second_schedule_event(uint8_t leap_dir, const char* file_name) {
     time_t now = time(NULL);
 
     if (event_time <= now) {
-        syslog(LOG_WARNING, "Leap second schedule: event time has passed (event_time=%ld, now=%ld)", (long)event_time, (long)now);
+        syslog(LOG_WARNING,
+               "Leap second schedule: event time has passed (event_time=%ld, "
+               "now=%ld)",
+               (long)event_time, (long)now);
         /* Still schedule it for next minute */
         event_time = end_of_minute + g_leap_second_state.event_interval_sec;
     }
 
     /* Store pending offset (60 seconds = 60,000,000 us) */
-    g_leap_second_state.pending_offset_us = leap_dir == LEAP_SECOND_DIR_POSITIVE ? (int64_t)60000000 : (int64_t)(-60000000);
+    g_leap_second_state.pending_offset_us = leap_dir == LEAP_SECOND_DIR_POSITIVE
+                                                ? (int64_t)60000000
+                                                : (int64_t)(-60000000);
     g_leap_second_state.pending_leap_dir = leap_dir;
     g_leap_second_state.event_time = event_time;
     g_leap_second_state.event_scheduled = true;
 
-    syslog(LOG_INFO, "Leap second event scheduled: %s leap second at %ld seconds from now", leap_dir == LEAP_SECOND_DIR_POSITIVE ? "positive" : "negative",
-           (long)(event_time - now));
+    syslog(
+        LOG_INFO,
+        "Leap second event scheduled: %s leap second at %ld seconds from now",
+        leap_dir == LEAP_SECOND_DIR_POSITIVE ? "positive" : "negative",
+        (long)(event_time - now));
 
     pthread_mutex_unlock(&g_leap_second_mutex);
 
@@ -309,7 +339,9 @@ int leap_second_apply_correction(uint8_t leap_dir) {
     /* Check if enough time has passed since event time */
     time_t now = time(NULL);
     if (now < g_leap_second_state.event_time) {
-        syslog(LOG_WARNING, "Leap second apply: event not yet due (now=%ld, event_time=%ld)", (long)now, (long)g_leap_second_state.event_time);
+        syslog(LOG_WARNING,
+               "Leap second apply: event not yet due (now=%ld, event_time=%ld)",
+               (long)now, (long)g_leap_second_state.event_time);
         pthread_mutex_unlock(&g_leap_second_mutex);
         return -1;
     }
@@ -322,7 +354,10 @@ int leap_second_apply_correction(uint8_t leap_dir) {
     int result = apply_time_correction_slew_or_step(offset_us);
 
     if (result == 0) {
-        syslog(LOG_INFO, "Leap second correction applied: %s leap second (%" PRId64 " us)", dir == LEAP_SECOND_DIR_POSITIVE ? "positive" : "negative",
+        syslog(LOG_INFO,
+               "Leap second correction applied: %s leap second (%" PRId64
+               " us)",
+               dir == LEAP_SECOND_DIR_POSITIVE ? "positive" : "negative",
                offset_us);
     } else {
         syslog(LOG_ERR, "Leap second correction failed: %s", strerror(errno));
@@ -358,9 +393,12 @@ int leap_second_check_and_apply(void) {
             int result = leap_second_apply_correction(leap_dir);
 
             if (result == 0) {
-                syslog(LOG_INFO, "Leap second event completed: %s leap second", leap_dir == LEAP_SECOND_DIR_POSITIVE ? "positive" : "negative");
+                syslog(LOG_INFO, "Leap second event completed: %s leap second",
+                       leap_dir == LEAP_SECOND_DIR_POSITIVE ? "positive"
+                                                            : "negative");
             } else {
-                syslog(LOG_ERR, "Leap second event failed: %s", strerror(errno));
+                syslog(LOG_ERR, "Leap second event failed: %s",
+                       strerror(errno));
             }
         }
     }
@@ -395,9 +433,12 @@ int leap_second_init(void) {
     g_leap_second_state.event_time = 0;
 
     /* Initialize file paths */
-    strncpy(g_leap_second_state.leap_file_dir, LEAP_SECOND_FILE_DIR, sizeof(g_leap_second_state.leap_file_dir) - 1);
-    strncpy(g_leap_second_state.leap_file_prefix, LEAP_SECOND_FILE_PREFIX, sizeof(g_leap_second_state.leap_file_prefix) - 1);
-    strncpy(g_leap_second_state.leap_file_suffix, LEAP_SECOND_FILE_SUFFIX, sizeof(g_leap_second_state.leap_file_suffix) - 1);
+    strncpy(g_leap_second_state.leap_file_dir, LEAP_SECOND_FILE_DIR,
+            sizeof(g_leap_second_state.leap_file_dir) - 1);
+    strncpy(g_leap_second_state.leap_file_prefix, LEAP_SECOND_FILE_PREFIX,
+            sizeof(g_leap_second_state.leap_file_prefix) - 1);
+    strncpy(g_leap_second_state.leap_file_suffix, LEAP_SECOND_FILE_SUFFIX,
+            sizeof(g_leap_second_state.leap_file_suffix) - 1);
 
     /* Initialize intervals */
     g_leap_second_state.check_interval_sec = LEAP_SECOND_CHECK_INTERVAL_SEC;
@@ -406,7 +447,8 @@ int leap_second_init(void) {
     syslog(LOG_INFO,
            "Leap second handling initialized: check_interval=%ds, "
            "event_interval=%ds",
-           g_leap_second_state.check_interval_sec, g_leap_second_state.event_interval_sec);
+           g_leap_second_state.check_interval_sec,
+           g_leap_second_state.event_interval_sec);
 
     pthread_mutex_unlock(&g_leap_second_mutex);
 

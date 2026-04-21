@@ -62,7 +62,7 @@ typedef struct {
     struct sockaddr_storage client_addr_storage; // Buffer for client address
     socklen_t client_addr_len;                   // Client address length
     PeerState* peer_state;                       // Peer state
-    atomic_bool sock_valid;                      // Socket validity flag (atomic for signal safety)
+    atomic_bool sock_valid; // Socket validity flag (atomic for signal safety)
 } PeerThreadContext;
 
 /**
@@ -109,17 +109,20 @@ static pthread_t g_peer_threads[MAX_PEERS];
  *
  * @return 0 на успех, < 0 на ошибку
  */
-static int handle_peer_request(const void* buffer, size_t size, const char* ip, const char* port, int peer_idx) {
+static int handle_peer_request(const void* buffer, size_t size, const char* ip,
+                               const char* port, int peer_idx) {
     int ret = 0;
 
     if (peer_idx < 0 || peer_idx >= MAX_PEERS) {
-        syslog(LOG_WARNING, "handle_peer_request: невалидный peer_idx=%d", peer_idx);
+        syslog(LOG_WARNING, "handle_peer_request: невалидный peer_idx=%d",
+               peer_idx);
         return -1;
     }
 
     // Проверка размера пакета
     if (size < sizeof(NtpPacket)) {
-        syslog(LOG_WARNING, "Пакет от %s:%s слишком мал (%zu байт)", ip, port, size);
+        syslog(LOG_WARNING, "Пакет от %s:%s слишком мал (%zu байт)", ip, port,
+               size);
         return -1;
     }
 
@@ -134,14 +137,16 @@ static int handle_peer_request(const void* buffer, size_t size, const char* ip, 
 
     // Проверка режима (должен быть клиентом - MODE 3)
     if ((pkt.li_vn_mode & NTP_MODE_MASK) != NTP_MODE_CLIENT) {
-        syslog(LOG_DEBUG, "Не клиентский режим от %s:%s (MODE=%u)", ip, port, pkt.li_vn_mode & NTP_MODE_MASK);
+        syslog(LOG_DEBUG, "Не клиентский режим от %s:%s (MODE=%u)", ip, port,
+               pkt.li_vn_mode & NTP_MODE_MASK);
         return -1;
     }
 
     // Блокировка мьютекса (используем переданный peer_idx)
     pthread_mutex_lock(&g_peer_ctx[peer_idx].sock_mutex);
 
-    if (atomic_load_explicit(&g_peer_ctx[peer_idx].sock_valid, memory_order_acquire)) {
+    if (atomic_load_explicit(&g_peer_ctx[peer_idx].sock_valid,
+                             memory_order_acquire)) {
         // Отправка ответа
         NtpPacket response;
         memset(&response, 0, sizeof(response));
@@ -159,14 +164,18 @@ static int handle_peer_request(const void* buffer, size_t size, const char* ip, 
         response.xmit_ts = pkt.xmit_ts;
         response.orig_ts = ntp_timestamp_now();
 
-        ssize_t send_len = sendto(g_peer_ctx[peer_idx].sock_fd, &response, sizeof(response), 0, (struct sockaddr*)&g_peer_ctx[peer_idx].client_addr_storage,
-                                  g_peer_ctx[peer_idx].client_addr_len);
+        ssize_t send_len =
+            sendto(g_peer_ctx[peer_idx].sock_fd, &response, sizeof(response), 0,
+                   (struct sockaddr*)&g_peer_ctx[peer_idx].client_addr_storage,
+                   g_peer_ctx[peer_idx].client_addr_len);
 
         if (send_len < 0) {
-            syslog(LOG_WARNING, "Ошибка отправки ответа %s:%s: %s", ip, port, strerror(errno));
+            syslog(LOG_WARNING, "Ошибка отправки ответа %s:%s: %s", ip, port,
+                   strerror(errno));
             ret = -1;
         } else {
-            syslog(LOG_DEBUG, "Ответ отправлен %s:%s (%zd байт)", ip, port, send_len);
+            syslog(LOG_DEBUG, "Ответ отправлен %s:%s (%zd байт)", ip, port,
+                   send_len);
         }
     }
 
@@ -201,10 +210,12 @@ static void* peer_thread_main(void* arg) {
         return NULL;
     }
 
-    syslog(LOG_INFO, "Поток обработки пэера запущен для %s:%s (idx=%d)", ctx->ip, ctx->port, idx);
+    syslog(LOG_INFO, "Поток обработки пэера запущен для %s:%s (idx=%d)",
+           ctx->ip, ctx->port, idx);
 
     // Установка флагов (C11 memory barrier implicit in atomic_store)
-    atomic_store_explicit(&g_peer_threads_running[idx], 1, memory_order_release);
+    atomic_store_explicit(&g_peer_threads_running[idx], 1,
+                          memory_order_release);
 
     // Защита g_peer_ctx мьютексом при инициализации
     pthread_mutex_lock(&g_peer_ctx[idx].sock_mutex);
@@ -214,39 +225,52 @@ static void* peer_thread_main(void* arg) {
     pthread_mutex_unlock(&g_peer_ctx[idx].sock_mutex);
 
     // Основной цикл
-    while (atomic_load_explicit(&g_peer_threads_running[idx], memory_order_acquire)) {
+    while (atomic_load_explicit(&g_peer_threads_running[idx],
+                                memory_order_acquire)) {
         /* Блокировка на входящие запросы */
         char buffer[BUFFER_SIZE];
         memset(buffer, 0, sizeof(buffer));
 
-        ssize_t recv_len = recvfrom(ctx->sock_fd, buffer, sizeof(buffer), MSG_DONTWAIT, (struct sockaddr*)&g_peer_ctx[idx].client_addr_storage,
-                                    &g_peer_ctx[idx].client_addr_len);
+        ssize_t recv_len =
+            recvfrom(ctx->sock_fd, buffer, sizeof(buffer), MSG_DONTWAIT,
+                     (struct sockaddr*)&g_peer_ctx[idx].client_addr_storage,
+                     &g_peer_ctx[idx].client_addr_len);
 
         if (recv_len < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 /* Нет данных - продолжаем цикл */
                 continue;
             }
-            syslog(LOG_WARNING, "Ошибка приёма от пэера %s:%s: %s", ctx->ip, ctx->port, strerror(errno));
+            syslog(LOG_WARNING, "Ошибка приёма от пэера %s:%s: %s", ctx->ip,
+                   ctx->port, strerror(errno));
             break;
         }
 
         /* Обработка запроса */
         char client_ip[INET_ADDRSTRLEN];
-        if (inet_ntop(AF_INET, &((struct sockaddr_in*)&g_peer_ctx[idx].client_addr_storage)->sin_addr, client_ip, sizeof(client_ip)) == NULL) {
+        if (inet_ntop(
+                AF_INET,
+                &((struct sockaddr_in*)&g_peer_ctx[idx].client_addr_storage)
+                     ->sin_addr,
+                client_ip, sizeof(client_ip)) == NULL) {
             snprintf(client_ip, sizeof(client_ip), "%s", "unknown");
         }
         char port_str[6];
-        snprintf(port_str, sizeof(port_str), "%hu", (unsigned short)ntohs(((struct sockaddr_in*)&g_peer_ctx[idx].client_addr_storage)->sin_port));
+        snprintf(port_str, sizeof(port_str), "%hu",
+                 (unsigned short)ntohs(
+                     ((struct sockaddr_in*)&g_peer_ctx[idx].client_addr_storage)
+                         ->sin_port));
 
         handle_peer_request(buffer, (size_t)recv_len, client_ip, port_str, idx);
     }
 
     // Очистка
     atomic_store_explicit(&g_peer_ctx[idx].sock_valid, 0, memory_order_release);
-    atomic_store_explicit(&g_peer_threads_running[idx], 0, memory_order_release);
+    atomic_store_explicit(&g_peer_threads_running[idx], 0,
+                          memory_order_release);
 
-    syslog(LOG_INFO, "Поток обработки пэера %s:%s завершён", ctx->ip, ctx->port);
+    syslog(LOG_INFO, "Поток обработки пэера %s:%s завершён", ctx->ip,
+           ctx->port);
 
     return NULL;
 }
@@ -262,7 +286,8 @@ static void* peer_thread_main(void* arg) {
  *
  * @return 0 на успех, < 0 на ошибку
  */
-static int peer_thread_init(int sock_fd, const char* ip, const char* port, PeerState* peer_state, int idx) {
+static int peer_thread_init(int sock_fd, const char* ip, const char* port,
+                            PeerState* peer_state, int idx) {
     // Инициализация контекста
     memset(&g_peer_ctx[idx], 0, sizeof(g_peer_ctx[idx]));
     snprintf(g_peer_ctx[idx].ip, sizeof(g_peer_ctx[idx].ip), "%s", ip);
@@ -276,7 +301,8 @@ static int peer_thread_init(int sock_fd, const char* ip, const char* port, PeerS
     pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_PRIVATE);
 
     if (pthread_mutex_init(&g_peer_ctx[idx].sock_mutex, &attr) != 0) {
-        syslog(LOG_ERR, "Ошибка инициализации мьютекса пэера %d: %s", idx, strerror(errno));
+        syslog(LOG_ERR, "Ошибка инициализации мьютекса пэера %d: %s", idx,
+               strerror(errno));
         pthread_mutexattr_destroy(&attr);
         return -1;
     }
@@ -296,12 +322,16 @@ static int peer_thread_init(int sock_fd, const char* ip, const char* port, PeerS
  *
  * @return 0 на успех, < 0 на ошибку
  */
-int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* peer_state, int idx) {
+int start_peer_thread(int sock_fd, const char* ip, const char* port,
+                      PeerState* peer_state, int idx) {
     pthread_t thread;
 
     // Проверка параметров
-    if (sock_fd < 0 || ip == NULL || port == NULL || idx < 0 || idx >= MAX_PEERS) {
-        syslog(LOG_ERR, "start_peer_thread %d: NULL параметры или невалидный сокет/idx", idx);
+    if (sock_fd < 0 || ip == NULL || port == NULL || idx < 0 ||
+        idx >= MAX_PEERS) {
+        syslog(LOG_ERR,
+               "start_peer_thread %d: NULL параметры или невалидный сокет/idx",
+               idx);
         return -1;
     }
 
@@ -315,22 +345,27 @@ int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* 
     g_peer_ctx[idx].idx = idx;
 
     // Запуск потока
-    if (pthread_create(&thread, NULL, peer_thread_main, &g_peer_ctx[idx]) != 0) {
-        syslog(LOG_ERR, "Ошибка создания потока пэера %d: %s", idx, strerror(errno));
+    if (pthread_create(&thread, NULL, peer_thread_main, &g_peer_ctx[idx]) !=
+        0) {
+        syslog(LOG_ERR, "Ошибка создания потока пэера %d: %s", idx,
+               strerror(errno));
         return -1;
     }
 
     // pthread_detach для автоматической очистки ресурсов
     if (pthread_detach(thread) != 0) {
-        syslog(LOG_ERR, "Ошибка pthread_detach потока пэера %d: %s", idx, strerror(errno));
+        syslog(LOG_ERR, "Ошибка pthread_detach потока пэера %d: %s", idx,
+               strerror(errno));
         return -1;
     }
 
     // Сохранение дескриптора потока
     g_peer_threads[idx] = thread;
 
-    // Установка флагов (C11 memory barrier для согласованн��сти видимости данных)
-    atomic_store_explicit(&g_peer_threads_running[idx], 1, memory_order_release);
+    // Установка флагов (C11 memory barrier для согласованн��сти видимости
+    // данных)
+    atomic_store_explicit(&g_peer_threads_running[idx], 1,
+                          memory_order_release);
 
     // Защита sock_fd и peer_state мьютексом (не атомарные типы)
     pthread_mutex_lock(&g_peer_ctx[idx].sock_mutex);
@@ -354,13 +389,18 @@ int start_peer_thread(int sock_fd, const char* ip, const char* port, PeerState* 
 void stop_peer_thread(void) {
     // Останавливаем все потоки пэеров
     for (int i = 0; i < g_peer_pool_count; i++) {
-        if (atomic_load_explicit(&g_peer_threads_running[i], memory_order_acquire)) {
+        if (atomic_load_explicit(&g_peer_threads_running[i],
+                                 memory_order_acquire)) {
             // Сброс флагов - поток выйдет из цикла при проверке
-            atomic_store_explicit(&g_peer_threads_running[i], 0, memory_order_release);
+            atomic_store_explicit(&g_peer_threads_running[i], 0,
+                                  memory_order_release);
 
             // pthread_join для ожидания завершения
             int join_ret = pthread_join(g_peer_threads[i], NULL);
-            if (join_ret != 0) { syslog(LOG_WARNING, "Ошибка pthread_join потока пэера %d: %s", i, strerror(join_ret)); }
+            if (join_ret != 0) {
+                syslog(LOG_WARNING, "Ошибка pthread_join потока пэера %d: %s",
+                       i, strerror(join_ret));
+            }
 
             syslog(LOG_INFO, "Поток пэера %d остановлен", i);
         }
@@ -379,7 +419,8 @@ void cleanup_peer_thread(void) {
     // Очистка всех потоков пэеров
     for (int i = 0; i < g_peer_pool_count; i++) {
         // Проверка, что поток остановлен (atomic для signal safety)
-        if (atomic_load_explicit(&g_peer_threads_running[i], memory_order_acquire)) {
+        if (atomic_load_explicit(&g_peer_threads_running[i],
+                                 memory_order_acquire)) {
             syslog(LOG_ERR, "cleanup_peer_thread %d: поток ещё работает!", i);
             continue;
         }
@@ -387,13 +428,19 @@ void cleanup_peer_thread(void) {
         // Защита sock_fd мьютексом перед закрытием
         pthread_mutex_lock(&g_peer_ctx[i].sock_mutex);
         if (g_peer_ctx[i].sock_fd >= 0) {
-            if (close(g_peer_ctx[i].sock_fd) != 0) { syslog(LOG_WARNING, "Ошибка close сокетa пэера %d: %s", i, strerror(errno)); }
+            if (close(g_peer_ctx[i].sock_fd) != 0) {
+                syslog(LOG_WARNING, "Ошибка close сокетa пэера %d: %s", i,
+                       strerror(errno));
+            }
             g_peer_ctx[i].sock_fd = -1;
         }
         pthread_mutex_unlock(&g_peer_ctx[i].sock_mutex);
 
         // Обработка ошибок pthread_mutex_destroy
-        if (pthread_mutex_destroy(&g_peer_ctx[i].sock_mutex) != 0) { syslog(LOG_WARNING, "Ошибка pthread_mutex_destroy пэера %d: %s", i, strerror(errno)); }
+        if (pthread_mutex_destroy(&g_peer_ctx[i].sock_mutex) != 0) {
+            syslog(LOG_WARNING, "Ошибка pthread_mutex_destroy пэера %d: %s", i,
+                   strerror(errno));
+        }
     }
 }
 
@@ -436,25 +483,29 @@ static void* clock_thread_main(void* arg) {
 
     /* CERT C 3.4.5: Check g_server_count before using global data */
     if (atomic_load_explicit(&g_server_count, memory_order_acquire) == 0) {
-        syslog(LOG_WARNING, "Clock thread started but no NTP servers configured.");
+        syslog(LOG_WARNING,
+               "Clock thread started but no NTP servers configured.");
         syslog(LOG_WARNING, "Clock thread will not perform synchronization.");
         /* Выходим из цикла, если нет серверов */
         atomic_store_explicit(&g_clock_thread_running, 0, memory_order_release);
         return NULL;
     }
 
-    syslog(LOG_INFO, "Поток обработки часов запущен (интервал %d мс)", ctx->interval_ms);
+    syslog(LOG_INFO, "Поток обработки часов запущен (интервал %d мс)",
+           ctx->interval_ms);
 
     /* Установка флагов (C11 memory barrier implicit in atomic_store) */
     atomic_store_explicit(&g_clock_thread_running, 1, memory_order_release);
 
     /* Основной цикл */
     struct timespec deadline;
-    while (atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) {
+    while (
+        atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) {
         /* Получение текущего времени */
         struct timeval tv;
         if (gettimeofday(&tv, NULL) != 0) {
-            syslog(LOG_WARNING, "Ошибка получения времени: %s", strerror(errno));
+            syslog(LOG_WARNING, "Ошибка получения времени: %s",
+                   strerror(errno));
             continue;
         }
 
@@ -463,7 +514,8 @@ static void* clock_thread_main(void* arg) {
 
         /* Защита g_last_sync_ts мьютексом (RFC 5905 Section 5.2) */
         pthread_mutex_lock(&g_mutex);
-        int64_t expected_ns = (int64_t)g_last_sync_ts.sec * 1000000000LL + g_last_sync_ts.frac * 1000;
+        int64_t expected_ns = (int64_t)g_last_sync_ts.sec * 1000000000LL +
+                              g_last_sync_ts.frac * 1000;
         pthread_mutex_unlock(&g_mutex);
 
         int64_t offset_ns = now_ns - expected_ns;
@@ -475,7 +527,8 @@ static void* clock_thread_main(void* arg) {
 
         /* Установка таймера - используем абсолютное время */
         if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) {
-            syslog(LOG_WARNING, "Ошибка получения времени: %s", strerror(errno));
+            syslog(LOG_WARNING, "Ошибка получения времени: %s",
+                   strerror(errno));
             sleep((unsigned int)(ctx->interval_ms / 1000));
             continue;
         }
@@ -487,7 +540,8 @@ static void* clock_thread_main(void* arg) {
         }
 
         pthread_mutex_lock(&g_clock_ctx.clock_mutex);
-        int rc = pthread_cond_timedwait(&g_clock_ctx.clock_cond, &g_clock_ctx.clock_mutex, &deadline);
+        int rc = pthread_cond_timedwait(&g_clock_ctx.clock_cond,
+                                        &g_clock_ctx.clock_mutex, &deadline);
         pthread_mutex_unlock(&g_clock_ctx.clock_mutex);
 
         if (rc == ETIMEDOUT) {
@@ -495,7 +549,10 @@ static void* clock_thread_main(void* arg) {
             continue;
         } else if (rc == EINTR) {
             /* Прерывание - проверяем флаг */
-            if (!atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) { break; }
+            if (!atomic_load_explicit(&g_clock_thread_running,
+                                      memory_order_acquire)) {
+                break;
+            }
             continue;
         } else {
             /* Уведомление - пробуждаем поток */
@@ -528,14 +585,16 @@ static int clock_thread_init(int interval_ms) {
     pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_PRIVATE);
 
     if (pthread_mutex_init(&g_clock_ctx.clock_mutex, &attr) != 0) {
-        syslog(LOG_ERR, "Ошибка инициализации мьютекса часов: %s", strerror(errno));
+        syslog(LOG_ERR, "Ошибка инициализации мьютекса часов: %s",
+               strerror(errno));
         ret = -1;
         goto cleanup_attr;
     }
 
     /* Инициализация условия */
     if (pthread_cond_init(&g_clock_ctx.clock_cond, NULL) != 0) {
-        syslog(LOG_ERR, "Ошибка инициализации условия часов: %s", strerror(errno));
+        syslog(LOG_ERR, "Ошибка инициализации условия часов: %s",
+               strerror(errno));
         ret = -1;
         goto cleanup_mutex;
     }
@@ -576,7 +635,8 @@ int start_clock_thread(int interval_ms) {
 
     /* ✅ ПРАКТИКА 1: pthread_detach для автоматической очистки ресурсов */
     if (pthread_detach(thread) != 0) {
-        syslog(LOG_ERR, "Ошибка pthread_detach потока часов: %s", strerror(errno));
+        syslog(LOG_ERR, "Ошибка pthread_detach потока часов: %s",
+               strerror(errno));
         ret = -1;
         goto cleanup;
     }
@@ -598,7 +658,9 @@ cleanup:
 void stop_clock_thread(void) {
     int join_ret = 0;
 
-    if (!atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) { return; }
+    if (!atomic_load_explicit(&g_clock_thread_running, memory_order_acquire)) {
+        return;
+    }
 
     /* Сброс флагов */
     atomic_store_explicit(&g_clock_thread_running, 0, memory_order_release);
@@ -610,7 +672,10 @@ void stop_clock_thread(void) {
 
     /* ✅ ПРАКТИКА 4: Обработка ошибок pthread_join */
     join_ret = pthread_join(g_clock_ctx.thread_id, NULL);
-    if (join_ret != 0) { syslog(LOG_WARNING, "Ошибка pthread_join потока часов: %s", strerror(join_ret)); }
+    if (join_ret != 0) {
+        syslog(LOG_WARNING, "Ошибка pthread_join потока часов: %s",
+               strerror(join_ret));
+    }
 
     /* Барьер памяти для согласованности видимости данных (C11 memory model) */
     atomic_thread_fence(memory_order_acquire);
@@ -666,6 +731,12 @@ void cleanup_clock_thread(void) {
     syslog(LOG_INFO, "Очистка ресурсов потока часов");
 
     /* Обработка ошибок pthread_mutex_destroy и pthread_cond_destroy */
-    if (pthread_mutex_destroy(&g_clock_ctx.clock_mutex) != 0) { syslog(LOG_WARNING, "Ошибка pthread_mutex_destroy часов: %s", strerror(errno)); }
-    if (pthread_cond_destroy(&g_clock_ctx.clock_cond) != 0) { syslog(LOG_WARNING, "Ошибка pthread_cond_destroy часов: %s", strerror(errno)); }
+    if (pthread_mutex_destroy(&g_clock_ctx.clock_mutex) != 0) {
+        syslog(LOG_WARNING, "Ошибка pthread_mutex_destroy часов: %s",
+               strerror(errno));
+    }
+    if (pthread_cond_destroy(&g_clock_ctx.clock_cond) != 0) {
+        syslog(LOG_WARNING, "Ошибка pthread_cond_destroy часов: %s",
+               strerror(errno));
+    }
 }

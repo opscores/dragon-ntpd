@@ -14,16 +14,17 @@
 #define MAX_RATE_LIMIT_ENTRIES 1024
 #define MAX_CONFIG_LINE 256
 
-static ModeConfig g_mode_config = {.enable_control_messages = 0,
-                                   .enable_symmetric_mode = 1,
-                                   .enable_broadcast = 0,
-                                   .drop_unauthenticated_control = 1,
-                                   .enable_ntp_auth = DEFAULT_ENABLE_NTP_AUTH,
-                                   .acl_default_policy = DEFAULT_ACL_FLAGS,
-                                   .rate_limit_interval = DEFAULT_RATE_LIMIT_INTERVAL,
-                                   .max_response_ratio = DEFAULT_MAX_RESPONSE_RATIO,
-                                   .initial_stratum = DEFAULT_INITIAL_STRATUM,
-                                   .panic_threshold = DEFAULT_PANIC_THRESHOLD};
+static ModeConfig g_mode_config = {
+    .enable_control_messages = 0,
+    .enable_symmetric_mode = 1,
+    .enable_broadcast = 0,
+    .drop_unauthenticated_control = 1,
+    .enable_ntp_auth = DEFAULT_ENABLE_NTP_AUTH,
+    .acl_default_policy = DEFAULT_ACL_FLAGS,
+    .rate_limit_interval = DEFAULT_RATE_LIMIT_INTERVAL,
+    .max_response_ratio = DEFAULT_MAX_RESPONSE_RATIO,
+    .initial_stratum = DEFAULT_INITIAL_STRATUM,
+    .panic_threshold = DEFAULT_PANIC_THRESHOLD};
 
 static AclEntry g_acl_entries[MAX_ACL_ENTRIES];
 static int g_acl_entry_count = 0;
@@ -47,7 +48,8 @@ static in_addr_t parse_network(const char* network, in_addr_t* mask) {
         if (len >= sizeof(buf)) return 0;
         memcpy(buf, network, len);
         buf[len] = '\0';
-        if (sscanf(slash + 1, "%u", &prefix_len) != 1 || prefix_len > 32) return 0;
+        if (sscanf(slash + 1, "%u", &prefix_len) != 1 || prefix_len > 32)
+            return 0;
     } else {
         if (strlen(network) >= sizeof(buf)) return 0;
         snprintf(buf, sizeof(buf), "%s", network);
@@ -98,7 +100,8 @@ static RateLimitEntry* rate_limit_insert(const char* client_ip) {
 
     if (g_rate_limit_entry_count >= MAX_RATE_LIMIT_ENTRIES) {
         syslog(LOG_WARNING, "Rate limit table full, evicting oldest entry");
-        memmove(g_rate_limit_entries, g_rate_limit_entries + 1, (MAX_RATE_LIMIT_ENTRIES - 1) * sizeof(RateLimitEntry));
+        memmove(g_rate_limit_entries, g_rate_limit_entries + 1,
+                (MAX_RATE_LIMIT_ENTRIES - 1) * sizeof(RateLimitEntry));
         g_rate_limit_entry_count--;
     }
 
@@ -123,7 +126,8 @@ void mode_handler_cleanup(void) {
     pthread_mutex_lock(&g_mode_mutex);
 
     /* Log current ACL state before cleanup */
-    syslog(LOG_INFO, "Mode handler cleanup: ACL entries: %d", acl_get_entry_count());
+    syslog(LOG_INFO, "Mode handler cleanup: ACL entries: %d",
+           acl_get_entry_count());
 
     /* Clear ACL entries */
     acl_clear_entries();
@@ -145,7 +149,8 @@ int mode_handler_set_config(const ModeConfig* config) {
     pthread_mutex_lock(&g_mode_mutex);
 
     /* Log current ACL state before config update */
-    syslog(LOG_INFO, "Mode handler config update: ACL entries: %d", acl_get_entry_count());
+    syslog(LOG_INFO, "Mode handler config update: ACL entries: %d",
+           acl_get_entry_count());
 
     memcpy(&g_mode_config, config, sizeof(g_mode_config));
 
@@ -213,7 +218,8 @@ int acl_remove_entry(const char* network) {
 
     for (i = 0; i < g_acl_entry_count; i++) {
         if (g_acl_entries[i].ip == net && g_acl_entries[i].mask == mask) {
-            memmove(&g_acl_entries[i], &g_acl_entries[i + 1], (size_t)(g_acl_entry_count - i - 1) * sizeof(AclEntry));
+            memmove(&g_acl_entries[i], &g_acl_entries[i + 1],
+                    (size_t)(g_acl_entry_count - i - 1) * sizeof(AclEntry));
             g_acl_entry_count--;
             pthread_mutex_unlock(&g_mode_mutex);
             syslog(LOG_INFO, "ACL entry removed: %s", network);
@@ -253,7 +259,8 @@ int acl_check_client(const char* client_ip, uint8_t packet_mode) {
     ip = parse_ip(client_ip);
     if (ip == 0) return 0;
 
-    if (packet_mode == NTP_MODE_SYMMETRIC_ACTIVE || packet_mode == NTP_MODE_SYMMETRIC_PASSIVE) {
+    if (packet_mode == NTP_MODE_SYMMETRIC_ACTIVE ||
+        packet_mode == NTP_MODE_SYMMETRIC_PASSIVE) {
         pthread_mutex_lock(&g_mode_mutex);
         if (!g_mode_config.enable_symmetric_mode) {
             pthread_mutex_unlock(&g_mode_mutex);
@@ -288,7 +295,9 @@ int acl_check_client(const char* client_ip, uint8_t packet_mode) {
     case NTP_MODE_CLIENT:
     case NTP_MODE_SERVER:
     case NTP_MODE_SYMMETRIC_ACTIVE:
-    case NTP_MODE_SYMMETRIC_PASSIVE: result = (flags & ACL_FLAG_NOSERVE) == 0; break;
+    case NTP_MODE_SYMMETRIC_PASSIVE:
+        result = (flags & ACL_FLAG_NOSERVE) == 0;
+        break;
     case NTP_MODE_BROADCAST: result = (flags & ACL_FLAG_NOSERVE) == 0; break;
     default: result = 0; break;
     }
@@ -393,7 +402,8 @@ int validate_packet_mode(uint8_t mode, size_t req_size, size_t resp_size) {
     pthread_mutex_unlock(&g_mode_mutex);
 
     if (resp_size > (size_t)((double)req_size * (double)max_ratio)) {
-        syslog(LOG_WARNING, "Response size %zu exceeds ratio from request %zu", resp_size, req_size);
+        syslog(LOG_WARNING, "Response size %zu exceeds ratio from request %zu",
+               resp_size, req_size);
         return -E2BIG;
     }
 
@@ -406,8 +416,12 @@ int validate_ntp_version(uint8_t version) {
 
 static int parse_bool(const char* val) {
     if (val == NULL) return -EINVAL;
-    if (strcmp(val, "1") == 0 || strcmp(val, "yes") == 0 || strcmp(val, "true") == 0 || strcmp(val, "on") == 0) return 1;
-    if (strcmp(val, "0") == 0 || strcmp(val, "no") == 0 || strcmp(val, "false") == 0 || strcmp(val, "off") == 0) return 0;
+    if (strcmp(val, "1") == 0 || strcmp(val, "yes") == 0 ||
+        strcmp(val, "true") == 0 || strcmp(val, "on") == 0)
+        return 1;
+    if (strcmp(val, "0") == 0 || strcmp(val, "no") == 0 ||
+        strcmp(val, "false") == 0 || strcmp(val, "off") == 0)
+        return 0;
     return -EINVAL;
 }
 
@@ -419,7 +433,8 @@ static int parse_uint8(const char* val, uint8_t* out) {
 
     errno = 0;
     result = strtoll(val, &endptr, 10);
-    if (errno != 0 || *endptr != '\0' || result < 0 || result > 255) return -EINVAL;
+    if (errno != 0 || *endptr != '\0' || result < 0 || result > 255)
+        return -EINVAL;
 
     *out = (uint8_t)result;
     return 0;
@@ -500,19 +515,23 @@ int mode_handler_parse_config(const char* config_file) {
             g_mode_config.acl_default_policy = flags;
         } else if (strcmp(key, "rate_limit_interval") == 0) {
             uint8_t interval;
-            if (parse_uint8(val, &interval) == 0) g_mode_config.rate_limit_interval = interval;
+            if (parse_uint8(val, &interval) == 0)
+                g_mode_config.rate_limit_interval = interval;
         } else if (strcmp(key, "max_response_ratio") == 0) {
             float ratio;
-            if (parse_float(val, &ratio) == 0) g_mode_config.max_response_ratio = ratio;
+            if (parse_float(val, &ratio) == 0)
+                g_mode_config.max_response_ratio = ratio;
         } else if (strcmp(key, "initial_stratum") == 0) {
             uint8_t stratum;
-            if (parse_uint8(val, &stratum) == 0) g_mode_config.initial_stratum = stratum;
+            if (parse_uint8(val, &stratum) == 0)
+                g_mode_config.initial_stratum = stratum;
         } else if (strcmp(key, "panic_threshold") == 0) {
             long long int t;
             char* endptr;
             errno = 0;
             t = strtoll(val, &endptr, 10);
-            if (errno == 0 && *endptr == '\0' && t > 0 && t <= 65535) g_mode_config.panic_threshold = (uint16_t)t;
+            if (errno == 0 && *endptr == '\0' && t > 0 && t <= 65535)
+                g_mode_config.panic_threshold = (uint16_t)t;
         } else if (strcmp(key, "acl_allow") == 0) {
             acl_add_entry(val, 0);
         } else if (strcmp(key, "acl_remove") == 0) {
@@ -549,7 +568,8 @@ int validate_packet_authentication(const void* buffer, size_t size) {
                 pthread_mutex_unlock(&g_mode_mutex);
 
                 if (!auth_enabled) {
-                    syslog(LOG_WARNING, "Authentication MAC present but NTP auth disabled");
+                    syslog(LOG_WARNING,
+                           "Authentication MAC present but NTP auth disabled");
                     return -ENOTSUP;
                 }
                 return 1;
@@ -575,7 +595,8 @@ int check_panic_condition(int64_t time_offset) {
     if (time_offset < 0) time_offset = -time_offset;
 
     if (time_offset > (int64_t)threshold * 1000000000LL) {
-        syslog(LOG_CRIT, "PANIC: time offset %lld exceeds threshold %d", (long long)time_offset, threshold);
+        syslog(LOG_CRIT, "PANIC: time offset %lld exceeds threshold %d",
+               (long long)time_offset, threshold);
         return 1;
     }
 

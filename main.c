@@ -76,7 +76,9 @@ void cleanup_resources(void) {
     save_frequency_persistent();
 
     if (g_cli.pid_file != NULL) {
-        if (unlink(g_cli.pid_file) == 0) { syslog(LOG_INFO, "PID файл удалён: %s", g_cli.pid_file); }
+        if (unlink(g_cli.pid_file) == 0) {
+            syslog(LOG_INFO, "PID файл удалён: %s", g_cli.pid_file);
+        }
     }
 
     if (g_server_count > 0 && g_servers != NULL) {
@@ -93,7 +95,8 @@ void cleanup_resources(void) {
 }
 
 int load_server_config(void) {
-    const char* config_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
+    const char* config_path =
+        g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
     FILE* fp = fopen(config_path, "r");
     if (!fp) {
         syslog(LOG_WARNING, "Config file not found: %s", config_path);
@@ -122,11 +125,15 @@ int load_server_config(void) {
             char* eq = strchr(line, '=');
             if (eq != NULL && strlen(eq + 1) > 1) {
                 size_t len = strlen(eq + 1);
-                while (len > 0 && (eq[1 + len - 1] == '\n' || eq[1 + len - 1] == '\r')) { len--; }
+                while (len > 0 &&
+                       (eq[1 + len - 1] == '\n' || eq[1 + len - 1] == '\r')) {
+                    len--;
+                }
                 if (len > 0 && len < INET_ADDRSTRLEN) {
                     free(g_cli.broadcast_addr);
                     g_cli.broadcast_addr = strndup(eq + 1, len);
-                    syslog(LOG_INFO, "Broadcast address from config: %s", g_cli.broadcast_addr);
+                    syslog(LOG_INFO, "Broadcast address from config: %s",
+                           g_cli.broadcast_addr);
                 }
             }
             continue;
@@ -136,7 +143,8 @@ int load_server_config(void) {
                 int val = (int)strtol(eq + 1, NULL, 10);
                 if (val >= 32 && val <= 128) {
                     g_cli.broadcast_interval = val;
-                    syslog(LOG_INFO, "Broadcast interval from config: %d seconds", val);
+                    syslog(LOG_INFO,
+                           "Broadcast interval from config: %d seconds", val);
                 }
             }
             continue;
@@ -144,7 +152,8 @@ int load_server_config(void) {
 
         char* colon = strchr(line, ':');
         if (!colon) {
-            syslog(LOG_WARNING, "Неверный формат строки конфигурации: %s", line);
+            syslog(LOG_WARNING, "Неверный формат строки конфигурации: %s",
+                   line);
             continue;
         }
 
@@ -187,7 +196,8 @@ int load_server_config(void) {
             return 0;
         }
 
-        ServerConfig* temp = realloc(g_servers, (size_t)(g_server_count + 1) * sizeof(ServerConfig));
+        ServerConfig* temp = realloc(g_servers, (size_t)(g_server_count + 1) *
+                                                    sizeof(ServerConfig));
         if (!temp) {
             syslog(LOG_CRIT, "Ошибка выделения памяти для списка серверов");
             free(new_ip);
@@ -218,10 +228,14 @@ int load_server_config(void) {
         pthread_mutex_lock(&g_mutex);
         if (g_peer_pool_count < MAX_PEERS) {
             /* CERT C 3.4.5: Use snprintf for bounds-safe string copy */
-            snprintf(g_peer_pool[g_peer_pool_count].ip, sizeof(g_peer_pool[g_peer_pool_count].ip), "%.*s", (int)(sizeof(g_peer_pool[g_peer_pool_count].ip) - 1),
+            snprintf(g_peer_pool[g_peer_pool_count].ip,
+                     sizeof(g_peer_pool[g_peer_pool_count].ip), "%.*s",
+                     (int)(sizeof(g_peer_pool[g_peer_pool_count].ip) - 1),
                      ip_str);
-            snprintf(g_peer_pool[g_peer_pool_count].port, sizeof(g_peer_pool[g_peer_pool_count].port), "%.*s",
-                     (int)(sizeof(g_peer_pool[g_peer_pool_count].port) - 1), port_str);
+            snprintf(g_peer_pool[g_peer_pool_count].port,
+                     sizeof(g_peer_pool[g_peer_pool_count].port), "%.*s",
+                     (int)(sizeof(g_peer_pool[g_peer_pool_count].port) - 1),
+                     port_str);
             g_peer_pool[g_peer_pool_count].stratum = 16; /* Unsynchronized */
             g_peer_pool[g_peer_pool_count].delay_us = 0;
             g_peer_pool[g_peer_pool_count].offset_us = 0;
@@ -230,9 +244,11 @@ int load_server_config(void) {
             g_peer_pool[g_peer_pool_count].last_update = 0;
             g_peer_pool[g_peer_pool_count].reachable = false;
             g_peer_pool_count++;
-            syslog(LOG_DEBUG, "Peer pool initialized: %s:%s (count=%d)", ip_str, port_str, g_peer_pool_count);
+            syslog(LOG_DEBUG, "Peer pool initialized: %s:%s (count=%d)", ip_str,
+                   port_str, g_peer_pool_count);
         } else {
-            syslog(LOG_WARNING, "Peer pool full (max=%d), skipping: %s:%s", MAX_PEERS, ip_str, port_str);
+            syslog(LOG_WARNING, "Peer pool full (max=%d), skipping: %s:%s",
+                   MAX_PEERS, ip_str, port_str);
         }
         pthread_mutex_unlock(&g_mutex);
     }
@@ -260,7 +276,8 @@ int apply_user_privileges(const char* username) {
         return -1;
     }
 
-    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)", username, (int)pw->pw_uid, (int)pw->pw_gid);
+    syslog(LOG_INFO, "Сменили пользователя на: %s (UID=%d, GID=%d)", username,
+           (int)pw->pw_uid, (int)pw->pw_gid);
     return 0;
 }
 
@@ -277,7 +294,9 @@ int main(int argc, char* argv[]) {
     if (parse_ret == 3) { return EXIT_SUCCESS; }
     if (parse_ret != 0) { return EXIT_FAILURE; }
 
-    if (g_cli.debug_level > 0) { fprintf(stderr, "Debug mode enabled (level %d)\n", g_cli.debug_level); }
+    if (g_cli.debug_level > 0) {
+        fprintf(stderr, "Debug mode enabled (level %d)\n", g_cli.debug_level);
+    }
 
     atexit(cleanup_resources);
 
@@ -299,22 +318,29 @@ int main(int argc, char* argv[]) {
             }
             fprintf(stderr, "Log file opened: %s\n", g_cli.log_file);
         } else {
-            syslog(LOG_WARNING, "Не удалось открыть log файл: %s: %s", g_cli.log_file, strerror(errno));
+            syslog(LOG_WARNING, "Не удалось открыть log файл: %s: %s",
+                   g_cli.log_file, strerror(errno));
         }
     }
 
     g_local_precision = get_system_precision();
-    syslog(LOG_INFO, "System precision: %d (2^%d = %.3f сек)", g_local_precision, g_local_precision,
-           g_local_precision >= 0 ? (double)(1 << g_local_precision) : (double)1.0 / (double)(1LL << (-g_local_precision)));
+    syslog(LOG_INFO, "System precision: %d (2^%d = %.3f сек)",
+           g_local_precision, g_local_precision,
+           g_local_precision >= 0
+               ? (double)(1 << g_local_precision)
+               : (double)1.0 / (double)(1LL << (-g_local_precision)));
 
     g_server_count = load_server_config();
 
     /* CERT C 3.4.5: Use parameter for boundary check instead of magic number */
     if (g_server_count <= 0) {
-        const char* cfg_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
+        const char* cfg_path =
+            g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
         syslog(LOG_WARNING, "No NTP servers configured in %s", cfg_path);
-        syslog(LOG_WARNING, "Clock thread disabled (no servers for synchronization).");
-        syslog(LOG_WARNING, "Peer thread running (accepting incoming requests only)");
+        syslog(LOG_WARNING,
+               "Clock thread disabled (no servers for synchronization).");
+        syslog(LOG_WARNING,
+               "Peer thread running (accepting incoming requests only)");
         closelog();
         return EXIT_FAILURE;
     }
@@ -337,19 +363,25 @@ int main(int argc, char* argv[]) {
             if (pid_fp != NULL) {
                 fprintf(pid_fp, "%d\n", (int)getpid());
                 fclose(pid_fp);
-                syslog(LOG_INFO, "PID файл записан: %s (PID=%d)", g_cli.pid_file, (int)getpid());
+                syslog(LOG_INFO, "PID файл записан: %s (PID=%d)",
+                       g_cli.pid_file, (int)getpid());
             } else {
-                syslog(LOG_WARNING, "Не удалось записать PID файл: %s: %s", g_cli.pid_file, strerror(errno));
+                syslog(LOG_WARNING, "Не удалось записать PID файл: %s: %s",
+                       g_cli.pid_file, strerror(errno));
             }
         }
 
         if (g_cli.run_user != NULL) {
-            if (apply_user_privileges(g_cli.run_user) != 0) { syslog(LOG_ERR, "Не удалось применить привилегии пользователя"); }
+            if (apply_user_privileges(g_cli.run_user) != 0) {
+                syslog(LOG_ERR, "Не удалось применить привилегии пользователя");
+            }
         }
     }
 
     /* Инициализация mode handler (Security-First) */
-    if (mode_handler_init() != 0) { syslog(LOG_WARNING, "Ошибка инициализации mode handler"); }
+    if (mode_handler_init() != 0) {
+        syslog(LOG_WARNING, "Ошибка инициализации mode handler");
+    }
     mode_handler_parse_config(MODES_CONFIG_FILE);
 
     /* Инициализация I-DO state (RFC 5905 Section 8.4) */
@@ -369,12 +401,16 @@ int main(int argc, char* argv[]) {
         syslog(LOG_INFO, "Leap second handling initialized");
     }
 
-    syslog(LOG_NOTICE, "=====================================================================");
-    int sync_interval_1 = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
+    syslog(LOG_NOTICE, "======================================================="
+                       "==============");
+    int sync_interval_1 =
+        g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
 
     /* RFC 5905 Section 5.2: Clock thread only if servers configured */
     if (g_server_count > 0) {
-        syslog(LOG_NOTICE, "Сервер NTP запущен. Обнаружено %d серверов. Интервал: %d сек.", g_server_count, sync_interval_1);
+        syslog(LOG_NOTICE,
+               "Сервер NTP запущен. Обнаружено %d серверов. Интервал: %d сек.",
+               g_server_count, sync_interval_1);
 
         /* Запуск потока коррекции часов (RFC 5905 Section 5.2) */
         if (start_clock_thread(sync_interval_1) != 0) {
@@ -382,17 +418,20 @@ int main(int argc, char* argv[]) {
             cleanup_resources();
             return EXIT_FAILURE;
         }
-        syslog(LOG_INFO, "Поток коррекции часов запущен (интервал %d сек)", sync_interval_1);
+        syslog(LOG_INFO, "Поток коррекции часов запущен (интервал %d сек)",
+               sync_interval_1);
     } else {
         /* RFC 5905 Section 5.1: Peer thread for incoming requests only */
-        syslog(LOG_NOTICE, "Running in server-only mode (no external servers for "
-                           "synchronization).");
+        syslog(LOG_NOTICE,
+               "Running in server-only mode (no external servers for "
+               "synchronization).");
     }
 
     /* RFC 5905 Section 5.1: Peer thread always runs for incoming requests */
     int peer_sock = create_udp_socket(NTP_PORT);
     if (peer_sock >= 0) {
-        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer pool
+        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer
+         * pool
          */
         if (start_peer_thread(peer_sock, "0.0.0.0", "123", NULL, 0) != 0) {
             syslog(LOG_CRIT, "Не удалось запустить поток обработки пэеров");
@@ -400,7 +439,8 @@ int main(int argc, char* argv[]) {
             cleanup_resources();
             return EXIT_FAILURE;
         }
-        syslog(LOG_INFO, "Поток обработки пэеров запущен (сокет %d)", peer_sock);
+        syslog(LOG_INFO, "Поток обработки пэеров запущен (сокет %d)",
+               peer_sock);
     } else {
         syslog(LOG_WARNING, "Не удалось создать сокет для потока пэеров");
         cleanup_resources();
@@ -423,15 +463,19 @@ int main(int argc, char* argv[]) {
         /* RFC 5905 Section 5.1: Check if any servers are configured before sync
          * loop */
         if (g_server_count == 0) {
-            syslog(LOG_WARNING, "No NTP servers configured - skipping synchronization loop.");
-            syslog(LOG_WARNING, "Server is running in request-handling mode only.");
+            syslog(
+                LOG_WARNING,
+                "No NTP servers configured - skipping synchronization loop.");
+            syslog(LOG_WARNING,
+                   "Server is running in request-handling mode only.");
             /* В цикле ждём shutdown без синхронизации (peer thread обрабатывает
              * запросы) */
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
             ts.tv_sec += 1; /* Ждём 1 секунду */
             pthread_mutex_lock(&g_clock_ctx.clock_mutex);
-            pthread_cond_timedwait(&g_clock_ctx.clock_cond, &g_clock_ctx.clock_mutex, &ts);
+            pthread_cond_timedwait(&g_clock_ctx.clock_cond,
+                                   &g_clock_ctx.clock_mutex, &ts);
             pthread_mutex_unlock(&g_clock_ctx.clock_mutex);
             continue;
         }
@@ -443,7 +487,8 @@ int main(int argc, char* argv[]) {
             time_t now = time(NULL);
             if (now < 0) now = 0;
 
-            if (g_servers[i].next_allowed_sync != 0 && now < g_servers[i].next_allowed_sync) {
+            if (g_servers[i].next_allowed_sync != 0 &&
+                now < g_servers[i].next_allowed_sync) {
                 all_success = false;
                 continue;
             }
@@ -464,7 +509,8 @@ int main(int argc, char* argv[]) {
                                 "завершились ошибкой.");
         }
 
-        int sync_interval_2 = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
+        int sync_interval_2 =
+            g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
         sleep((unsigned int)sync_interval_2);
 
         if (g_cli.quit_after_sync) {

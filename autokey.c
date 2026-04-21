@@ -111,14 +111,16 @@ void autokey_cleanup_state(AutokeyState* state) {
  *
  * @return true if offer processed successfully, false otherwise
  */
-bool autokey_process_offer(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool autokey_process_offer(AutokeyState* state, uint16_t ef_type,
+                           uint8_t ef_length, const uint8_t* ef_data) {
     if (state == NULL) { return false; }
 
     /* Validate extension field type */
     if (ef_type != NTP_EF_AUTOKEY_OFFER) { return false; }
 
     /* Validate extension field length (min 4 bytes) */
-    if (ef_length < AUTOKEY_MIN_EF_LENGTH || ef_length > AUTOKEY_MAX_EF_LENGTH) {
+    if (ef_length < AUTOKEY_MIN_EF_LENGTH ||
+        ef_length > AUTOKEY_MAX_EF_LENGTH) {
         syslog(LOG_WARNING, "Autokey: Invalid offer length %u", ef_length);
         return false;
     }
@@ -127,7 +129,9 @@ bool autokey_process_offer(AutokeyState* state, uint16_t ef_type, uint8_t ef_len
     if (ef_data != NULL && ef_length >= 4) {
         /* Capability flags are in the first byte */
         uint8_t flags = ef_data[0];
-        if (ef_length > 0) { state->autokey_capabilities = flags & 0x07; /* Only lower 3 bits */ }
+        if (ef_length > 0) {
+            state->autokey_capabilities = flags & 0x07; /* Only lower 3 bits */
+        }
     }
 
     /* Transition state machine */
@@ -135,7 +139,8 @@ bool autokey_process_offer(AutokeyState* state, uint16_t ef_type, uint8_t ef_len
     state->autokey_state = AUTOKEY_STATE_OFFER_RECEIVED;
 
     /* Log state transition */
-    syslog(LOG_INFO, "Autokey: Offer received, state: %s", autokey_state_name(state->autokey_state));
+    syslog(LOG_INFO, "Autokey: Offer received, state: %s",
+           autokey_state_name(state->autokey_state));
 
     return true;
 }
@@ -152,14 +157,16 @@ bool autokey_process_offer(AutokeyState* state, uint16_t ef_type, uint8_t ef_len
  *
  * @return true if response processed successfully, false otherwise
  */
-bool autokey_process_response(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool autokey_process_response(AutokeyState* state, uint16_t ef_type,
+                              uint8_t ef_length, const uint8_t* ef_data) {
     if (state == NULL) { return false; }
 
     /* Validate extension field type */
     if (ef_type != NTP_EF_AUTOKEY_RESPONSE) { return false; }
 
     /* Validate extension field length (min 4 bytes) */
-    if (ef_length < AUTOKEY_MIN_EF_LENGTH || ef_length > AUTOKEY_MAX_EF_LENGTH) {
+    if (ef_length < AUTOKEY_MIN_EF_LENGTH ||
+        ef_length > AUTOKEY_MAX_EF_LENGTH) {
         syslog(LOG_WARNING, "Autokey: Invalid response length %u", ef_length);
         return false;
     }
@@ -168,7 +175,9 @@ bool autokey_process_response(AutokeyState* state, uint16_t ef_type, uint8_t ef_
     if (ef_data != NULL && ef_length >= 4) {
         /* Capability flags are in the first byte */
         uint8_t flags = ef_data[0];
-        if (ef_length > 0) { state->autokey_capabilities = flags & 0x07; /* Only lower 3 bits */ }
+        if (ef_length > 0) {
+            state->autokey_capabilities = flags & 0x07; /* Only lower 3 bits */
+        }
     }
 
     /* Transition state machine */
@@ -177,7 +186,8 @@ bool autokey_process_response(AutokeyState* state, uint16_t ef_type, uint8_t ef_
     state->autokey_authenticated = 1;
 
     /* Log state transition */
-    syslog(LOG_INFO, "Autokey: Response sent, state: %s", autokey_state_name(state->autokey_state));
+    syslog(LOG_INFO, "Autokey: Response sent, state: %s",
+           autokey_state_name(state->autokey_state));
 
     return true;
 }
@@ -198,14 +208,19 @@ bool autokey_process_response(AutokeyState* state, uint16_t ef_type, uint8_t ef_
  *
  * @return true if extension field processed successfully, false otherwise
  */
-bool autokey_process(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool autokey_process(AutokeyState* state, uint16_t ef_type, uint8_t ef_length,
+                     const uint8_t* ef_data) {
     if (state == NULL || ef_data == NULL) { return false; }
 
     /* Check if it's an Offer (server -> client) */
-    if (ef_type == NTP_EF_AUTOKEY_OFFER) { return autokey_process_offer(state, ef_type, ef_length, ef_data); }
+    if (ef_type == NTP_EF_AUTOKEY_OFFER) {
+        return autokey_process_offer(state, ef_type, ef_length, ef_data);
+    }
 
     /* Check if it's a Response (client -> server) */
-    if (ef_type == NTP_EF_AUTOKEY_RESPONSE) { return autokey_process_response(state, ef_type, ef_length, ef_data); }
+    if (ef_type == NTP_EF_AUTOKEY_RESPONSE) {
+        return autokey_process_response(state, ef_type, ef_length, ef_data);
+    }
 
     return false;
 }
@@ -222,12 +237,16 @@ bool autokey_process(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, c
  *
  * @return true if extension field is valid Autokey, false otherwise
  */
-bool autokey_process_skip(AutokeyState* state, uint16_t ef_type, uint8_t ef_length) {
+bool autokey_process_skip(AutokeyState* state, uint16_t ef_type,
+                          uint8_t ef_length) {
     /* Validate extension field type */
-    if (ef_type != NTP_EF_AUTOKEY_OFFER && ef_type != NTP_EF_AUTOKEY_RESPONSE) { return false; }
+    if (ef_type != NTP_EF_AUTOKEY_OFFER && ef_type != NTP_EF_AUTOKEY_RESPONSE) {
+        return false;
+    }
 
     /* Validate extension field length (min 4 bytes) */
-    if (ef_length < AUTOKEY_MIN_EF_LENGTH || ef_length > AUTOKEY_MAX_EF_LENGTH) {
+    if (ef_length < AUTOKEY_MIN_EF_LENGTH ||
+        ef_length > AUTOKEY_MAX_EF_LENGTH) {
         syslog(LOG_WARNING, "Autokey: Invalid skip length %u", ef_length);
         return false;
     }
@@ -269,17 +288,23 @@ uint8_t autokey_state_machine(AutokeyState* state, uint8_t event) {
     switch (event) {
     case AUTOKEY_EVENT_OFFER_RECEIVED:
         /* IDLE → OFFER_RECEIVED */
-        if (state->autokey_state == AUTOKEY_STATE_IDLE) { new_state = AUTOKEY_STATE_OFFER_RECEIVED; }
+        if (state->autokey_state == AUTOKEY_STATE_IDLE) {
+            new_state = AUTOKEY_STATE_OFFER_RECEIVED;
+        }
         break;
 
     case AUTOKEY_EVENT_RESPONSE_SENT:
         /* OFFER_RECEIVED → RESPONSE_SENT */
-        if (state->autokey_state == AUTOKEY_STATE_OFFER_RECEIVED) { new_state = AUTOKEY_STATE_RESPONSE_SENT; }
+        if (state->autokey_state == AUTOKEY_STATE_OFFER_RECEIVED) {
+            new_state = AUTOKEY_STATE_RESPONSE_SENT;
+        }
         break;
 
     case AUTOKEY_EVENT_AUTH_ESTABLISHED:
         /* RESPONSE_SENT → AUTHENTICATED */
-        if (state->autokey_state == AUTOKEY_STATE_RESPONSE_SENT) { new_state = AUTOKEY_STATE_AUTHENTICATED; }
+        if (state->autokey_state == AUTOKEY_STATE_RESPONSE_SENT) {
+            new_state = AUTOKEY_STATE_AUTHENTICATED;
+        }
         break;
 
     case AUTOKEY_EVENT_NEGOTIATION_FAILED:
@@ -293,7 +318,8 @@ uint8_t autokey_state_machine(AutokeyState* state, uint8_t event) {
     if (new_state != state->autokey_state) {
         uint8_t prev_state = state->autokey_state;
         state->autokey_state = new_state;
-        syslog(LOG_INFO, "Autokey: State transition: %s → %s", autokey_state_name(prev_state), autokey_state_name(new_state));
+        syslog(LOG_INFO, "Autokey: State transition: %s → %s",
+               autokey_state_name(prev_state), autokey_state_name(new_state));
     }
 
     return new_state;
@@ -317,8 +343,11 @@ void autokey_log_state(const AutokeyState* state) {
     syslog(LOG_INFO,
            "Autokey: State: %s, Offer: %s, Response: %s, "
            "Capabilities: 0x%02X, KeyID: %u, Authenticated: %s",
-           autokey_state_name(state->autokey_state), state->autokey_offer_received ? "yes" : "no", state->autokey_response_sent ? "yes" : "no",
-           state->autokey_capabilities, state->autokey_key_id, state->autokey_authenticated ? "yes" : "no");
+           autokey_state_name(state->autokey_state),
+           state->autokey_offer_received ? "yes" : "no",
+           state->autokey_response_sent ? "yes" : "no",
+           state->autokey_capabilities, state->autokey_key_id,
+           state->autokey_authenticated ? "yes" : "no");
 }
 
 /**
@@ -372,7 +401,8 @@ const char* autokey_capability_name(uint8_t flag) {
  * @param digest Output buffer (20 bytes)
  * @return 0 on success, -1 on error
  */
-int autokey_compute_hmac(const uint8_t* data, size_t data_len, const uint8_t* key, size_t key_len, uint8_t* digest) {
+int autokey_compute_hmac(const uint8_t* data, size_t data_len,
+                         const uint8_t* key, size_t key_len, uint8_t* digest) {
     if (data == NULL || key == NULL || digest == NULL) { return -1; }
 
     /* Validate key length */
@@ -387,7 +417,8 @@ int autokey_compute_hmac(const uint8_t* data, size_t data_len, const uint8_t* ke
     /* Initialize HMAC-SHA1 context */
     err = gcry_md_open(&hd, GCRY_MD_SHA1, GCRY_MD_FLAG_HMAC);
     if (err != GPG_ERR_NO_ERROR) {
-        syslog(LOG_ERR, "Autokey: Failed to open HMAC context: %s", gcry_strsource(err));
+        syslog(LOG_ERR, "Autokey: Failed to open HMAC context: %s",
+               gcry_strsource(err));
         return -1;
     }
 
@@ -395,7 +426,8 @@ int autokey_compute_hmac(const uint8_t* data, size_t data_len, const uint8_t* ke
     err = gcry_md_setkey(hd, key, (unsigned int)key_len);
     if (err != GPG_ERR_NO_ERROR) {
         gcry_md_close(hd);
-        syslog(LOG_ERR, "Autokey: Failed to set HMAC key: %s", gcry_strsource(err));
+        syslog(LOG_ERR, "Autokey: Failed to set HMAC key: %s",
+               gcry_strsource(err));
         return -1;
     }
 
@@ -425,7 +457,8 @@ int autokey_compute_hmac(const uint8_t* data, size_t data_len, const uint8_t* ke
  * @param key Output buffer (20 bytes)
  * @return 0 on success, -1 on error
  */
-static int autokey_load_key_from_file(const char* key_file, uint32_t* key_id, uint8_t* key) {
+static int autokey_load_key_from_file(const char* key_file, uint32_t* key_id,
+                                      uint8_t* key) {
     if (key_file == NULL || key == NULL) { return -1; }
 
     FILE* fp = fopen(key_file, "rb");
@@ -443,7 +476,8 @@ static int autokey_load_key_from_file(const char* key_file, uint32_t* key_id, ui
     }
 
     /* Read key */
-    if (fread(key, 1, HMAC_SHA1_DIGEST_SIZE, fp) != (size_t)HMAC_SHA1_DIGEST_SIZE) {
+    if (fread(key, 1, HMAC_SHA1_DIGEST_SIZE, fp) !=
+        (size_t)HMAC_SHA1_DIGEST_SIZE) {
         syslog(LOG_WARNING, "Autokey: Failed to read key from file");
         fclose(fp);
         return -1;
@@ -472,26 +506,32 @@ int autokey_init(const char* key_file, uint32_t key_id) {
     /* If key file specified, load key */
     if (key_file != NULL) {
         uint32_t file_key_id = key_id;
-        int ret = autokey_load_key_from_file(key_file, &file_key_id, g_autokey_state.autokey_key);
+        int ret = autokey_load_key_from_file(key_file, &file_key_id,
+                                             g_autokey_state.autokey_key);
         if (ret < 0) {
-            syslog(LOG_WARNING, "Autokey: Failed to load key from file, using default");
+            syslog(LOG_WARNING,
+                   "Autokey: Failed to load key from file, using default");
             /* Use default key for testing */
             memset(g_autokey_state.autokey_key, 0xAA, HMAC_SHA1_DIGEST_SIZE);
             g_autokey_state.autokey_key_id = AUTOKEY_DEFAULT_KEY_ID;
         } else {
             /* Limit key_id to 8 bits (0-255) per RFC 5906 */
-            g_autokey_state.autokey_key_id = (file_key_id > 255) ? 0 : (uint8_t)file_key_id;
+            g_autokey_state.autokey_key_id =
+                (file_key_id > 255) ? 0 : (uint8_t)file_key_id;
         }
     } else {
         /* Use default key for testing */
         memset(g_autokey_state.autokey_key, 0xAA, HMAC_SHA1_DIGEST_SIZE);
         /* Limit key_id to 8 bits (0-255) per RFC 5906 */
-        g_autokey_state.autokey_key_id = (key_id > 0 && key_id <= 255) ? (uint8_t)key_id : AUTOKEY_DEFAULT_KEY_ID;
+        g_autokey_state.autokey_key_id = (key_id > 0 && key_id <= 255)
+                                             ? (uint8_t)key_id
+                                             : AUTOKEY_DEFAULT_KEY_ID;
     }
 
     g_autokey_state.autokey_enabled = 1;
 
-    syslog(LOG_INFO, "Autokey: Initialized with KeyID %u", g_autokey_state.autokey_key_id);
+    syslog(LOG_INFO, "Autokey: Initialized with KeyID %u",
+           g_autokey_state.autokey_key_id);
 
     return 0;
 }
@@ -517,7 +557,8 @@ void autokey_cleanup(void) {
  * @param key Key material (20 bytes)
  * @return 0 on success, -1 on error
  */
-int autokey_install_key(AutokeyState* state, uint32_t key_id, const uint8_t* key) {
+int autokey_install_key(AutokeyState* state, uint32_t key_id,
+                        const uint8_t* key) {
     if (state == NULL || key == NULL) { return -1; }
 
     /* Validate key ID */
@@ -548,12 +589,14 @@ int autokey_install_key(AutokeyState* state, uint32_t key_id, const uint8_t* key
  * @param new_key New key material (20 bytes)
  * @return 0 on success, -1 on error
  */
-int autokey_rotate_key(AutokeyState* state, uint32_t new_key_id, const uint8_t* new_key) {
+int autokey_rotate_key(AutokeyState* state, uint32_t new_key_id,
+                       const uint8_t* new_key) {
     if (state == NULL || new_key == NULL) { return -1; }
 
     /* Validate new key ID */
     if (new_key_id > 255) {
-        syslog(LOG_WARNING, "Autokey: Invalid new key ID %u (max 255)", new_key_id);
+        syslog(LOG_WARNING, "Autokey: Invalid new key ID %u (max 255)",
+               new_key_id);
         return -1;
     }
 
@@ -602,7 +645,8 @@ int autokey_compute_mac(const uint8_t* pkt, size_t pkt_len, uint32_t key_id) {
 
     /* Use global state for key */
     if (g_autokey_state.autokey_key_id != key_id) {
-        syslog(LOG_WARNING, "Autokey: Key ID mismatch (%u != %u)", key_id, g_autokey_state.autokey_key_id);
+        syslog(LOG_WARNING, "Autokey: Key ID mismatch (%u != %u)", key_id,
+               g_autokey_state.autokey_key_id);
         return -1;
     }
 
@@ -613,7 +657,8 @@ int autokey_compute_mac(const uint8_t* pkt, size_t pkt_len, uint32_t key_id) {
 
     /* Compute HMAC-SHA1 */
     uint8_t digest[HMAC_SHA1_DIGEST_SIZE];
-    int ret = autokey_compute_hmac(pkt, pkt_len, g_autokey_state.autokey_key, HMAC_SHA1_DIGEST_SIZE, digest);
+    int ret = autokey_compute_hmac(pkt, pkt_len, g_autokey_state.autokey_key,
+                                   HMAC_SHA1_DIGEST_SIZE, digest);
     if (ret < 0) {
         syslog(LOG_ERR, "Autokey: Failed to compute MAC");
         return -1;
@@ -637,7 +682,8 @@ int autokey_verify_mac(const uint8_t* pkt, size_t pkt_len, uint32_t key_id) {
 
     /* Use global state for key */
     if (g_autokey_state.autokey_key_id != key_id) {
-        syslog(LOG_WARNING, "Autokey: Key ID mismatch (%u != %u)", key_id, g_autokey_state.autokey_key_id);
+        syslog(LOG_WARNING, "Autokey: Key ID mismatch (%u != %u)", key_id,
+               g_autokey_state.autokey_key_id);
         return -1;
     }
 
@@ -648,7 +694,8 @@ int autokey_verify_mac(const uint8_t* pkt, size_t pkt_len, uint32_t key_id) {
 
     /* Compute expected MAC */
     uint8_t expected[HMAC_SHA1_DIGEST_SIZE];
-    int ret = autokey_compute_hmac(pkt, pkt_len, g_autokey_state.autokey_key, HMAC_SHA1_DIGEST_SIZE, expected);
+    int ret = autokey_compute_hmac(pkt, pkt_len, g_autokey_state.autokey_key,
+                                   HMAC_SHA1_DIGEST_SIZE, expected);
     if (ret < 0) {
         syslog(LOG_ERR, "Autokey: Failed to compute MAC for verification");
         return -1;
@@ -670,7 +717,8 @@ int autokey_verify_mac(const uint8_t* pkt, size_t pkt_len, uint32_t key_id) {
  * @param ef_data Extension field data
  * @return true if processed successfully, false otherwise
  */
-bool autokey_process_key_install(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool autokey_process_key_install(AutokeyState* state, uint16_t ef_type,
+                                 uint8_t ef_length, const uint8_t* ef_data) {
     if (state == NULL) { return false; }
 
     /* Validate extension field type */
@@ -678,13 +726,15 @@ bool autokey_process_key_install(AutokeyState* state, uint16_t ef_type, uint8_t 
 
     /* Validate extension field length (min 4 bytes: 4 ID + 20 key) */
     if (ef_length < 24 || ef_length > AUTOKEY_MAX_EF_LENGTH) {
-        syslog(LOG_WARNING, "Autokey: Invalid Key Install length %u", ef_length);
+        syslog(LOG_WARNING, "Autokey: Invalid Key Install length %u",
+               ef_length);
         return false;
     }
 
     /* Extract key ID from extension field data (first 4 bytes) */
     if (ef_data != NULL && ef_length >= 4) {
-        uint32_t key_id = (uint32_t)((ef_data[0] << 24) | (ef_data[1] << 16) | (ef_data[2] << 8) | ef_data[3]);
+        uint32_t key_id = (uint32_t)((ef_data[0] << 24) | (ef_data[1] << 16) |
+                                     (ef_data[2] << 8) | ef_data[3]);
 
         /* Extract key from extension field data (bytes 4-23) */
         if (ef_length >= 24) {
@@ -713,7 +763,8 @@ bool autokey_process_key_install(AutokeyState* state, uint16_t ef_type, uint8_t 
  * @param ef_data Extension field data
  * @return true if processed successfully, false otherwise
  */
-bool autokey_process_key_rotate(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool autokey_process_key_rotate(AutokeyState* state, uint16_t ef_type,
+                                uint8_t ef_length, const uint8_t* ef_data) {
     if (state == NULL) { return false; }
 
     /* Validate extension field type */
@@ -727,7 +778,9 @@ bool autokey_process_key_rotate(AutokeyState* state, uint16_t ef_type, uint8_t e
 
     /* Extract key ID from extension field data (first 4 bytes) */
     if (ef_data != NULL && ef_length >= 4) {
-        uint32_t new_key_id = (uint32_t)((ef_data[0] << 24) | (ef_data[1] << 16) | (ef_data[2] << 8) | ef_data[3]);
+        uint32_t new_key_id =
+            (uint32_t)((ef_data[0] << 24) | (ef_data[1] << 16) |
+                       (ef_data[2] << 8) | ef_data[3]);
 
         /* Extract new key from extension field data (bytes 4-23) */
         if (ef_length >= 24) {
@@ -756,7 +809,8 @@ bool autokey_process_key_rotate(AutokeyState* state, uint16_t ef_type, uint8_t e
  * @param ef_data Extension field data
  * @return true if processed successfully, false otherwise
  */
-bool autokey_process_key_revoke(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool autokey_process_key_revoke(AutokeyState* state, uint16_t ef_type,
+                                uint8_t ef_length, const uint8_t* ef_data) {
     if (state == NULL) { return false; }
 
     /* Validate extension field type */
@@ -770,7 +824,8 @@ bool autokey_process_key_revoke(AutokeyState* state, uint16_t ef_type, uint8_t e
 
     /* Extract key ID from extension field data (first 4 bytes) */
     if (ef_data != NULL && ef_length >= 4) {
-        uint32_t key_id = (uint32_t)((ef_data[0] << 24) | (ef_data[1] << 16) | (ef_data[2] << 8) | ef_data[3]);
+        uint32_t key_id = (uint32_t)((ef_data[0] << 24) | (ef_data[1] << 16) |
+                                     (ef_data[2] << 8) | ef_data[3]);
 
         int ret = autokey_revoke_key(state, key_id);
         if (ret < 0) {

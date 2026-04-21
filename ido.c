@@ -99,11 +99,14 @@ void ido_state_cleanup(IdoState* ido_state) {
  *
  * @return true if offer processed successfully, false otherwise
  */
-bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
+                       const uint8_t* ef_data) {
     if (ido_state == NULL) { return false; }
 
     /* Validate extension field type (I-DO or Autokey) */
-    if (ef_type != IDO_EF_TYPE_OFFER && ef_type != IDO_EF_AUTOKEY_OFFER) { return false; }
+    if (ef_type != IDO_EF_TYPE_OFFER && ef_type != IDO_EF_AUTOKEY_OFFER) {
+        return false;
+    }
 
     /* Validate extension field length (min 4 bytes) */
     if (ef_length < IDO_MIN_EF_LENGTH || ef_length > 48) {
@@ -115,7 +118,9 @@ bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
     if (ef_data != NULL && ef_length >= 4) {
         /* Capability flags are in the first byte */
         uint8_t flags = ef_data[0];
-        if (ef_length > 0) { ido_state->ido_capabilities = flags & 0x07; /* Only lower 3 bits */ }
+        if (ef_length > 0) {
+            ido_state->ido_capabilities = flags & 0x07; /* Only lower 3 bits */
+        }
     }
 
     /* Transition state machine */
@@ -123,7 +128,8 @@ bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
     ido_state->ido_state = IDO_STATE_OFFER_RECEIVED;
 
     /* Log state transition */
-    syslog(LOG_INFO, "I-DO/Autokey: Offer received, state: %s", ido_state_name(ido_state->ido_state));
+    syslog(LOG_INFO, "I-DO/Autokey: Offer received, state: %s",
+           ido_state_name(ido_state->ido_state));
 
     return true;
 }
@@ -142,15 +148,19 @@ bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
  *
  * @return true if response processed successfully, false otherwise
  */
-bool ido_process_response(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool ido_process_response(IdoState* ido_state, uint16_t ef_type,
+                          uint8_t ef_length, const uint8_t* ef_data) {
     if (ido_state == NULL) { return false; }
 
     /* Validate extension field type (I-DO or Autokey) */
-    if (ef_type != IDO_EF_TYPE_RESPONSE && ef_type != IDO_EF_AUTOKEY_RESPONSE) { return false; }
+    if (ef_type != IDO_EF_TYPE_RESPONSE && ef_type != IDO_EF_AUTOKEY_RESPONSE) {
+        return false;
+    }
 
     /* Validate extension field length (min 4 bytes) */
     if (ef_length < IDO_MIN_EF_LENGTH || ef_length > 48) {
-        syslog(LOG_WARNING, "I-DO/Autokey: Invalid response length %u", ef_length);
+        syslog(LOG_WARNING, "I-DO/Autokey: Invalid response length %u",
+               ef_length);
         return false;
     }
 
@@ -158,7 +168,9 @@ bool ido_process_response(IdoState* ido_state, uint16_t ef_type, uint8_t ef_leng
     if (ef_data != NULL && ef_length >= 4) {
         /* Capability flags are in the first byte */
         uint8_t flags = ef_data[0];
-        if (ef_length > 0) { ido_state->ido_capabilities = flags & 0x07; /* Only lower 3 bits */ }
+        if (ef_length > 0) {
+            ido_state->ido_capabilities = flags & 0x07; /* Only lower 3 bits */
+        }
     }
 
     /* Transition state machine */
@@ -167,7 +179,8 @@ bool ido_process_response(IdoState* ido_state, uint16_t ef_type, uint8_t ef_leng
     ido_state->ido_authenticated = 1;
 
     /* Log state transition */
-    syslog(LOG_INFO, "I-DO/Autokey: Response sent, state: %s", ido_state_name(ido_state->ido_state));
+    syslog(LOG_INFO, "I-DO/Autokey: Response sent, state: %s",
+           ido_state_name(ido_state->ido_state));
 
     return true;
 }
@@ -191,14 +204,19 @@ bool ido_process_response(IdoState* ido_state, uint16_t ef_type, uint8_t ef_leng
  *
  * @return true if extension field processed successfully, false otherwise
  */
-bool ido_process(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data) {
+bool ido_process(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
+                 const uint8_t* ef_data) {
     if (ido_state == NULL || ef_data == NULL) { return false; }
 
     /* Check if it's an Offer (server -> client) */
-    if (ef_type == IDO_EF_TYPE_OFFER || ef_type == IDO_EF_AUTOKEY_OFFER) { return ido_process_offer(ido_state, ef_type, ef_length, ef_data); }
+    if (ef_type == IDO_EF_TYPE_OFFER || ef_type == IDO_EF_AUTOKEY_OFFER) {
+        return ido_process_offer(ido_state, ef_type, ef_length, ef_data);
+    }
 
     /* Check if it's a Response (client -> server) */
-    if (ef_type == IDO_EF_TYPE_RESPONSE || ef_type == IDO_EF_AUTOKEY_RESPONSE) { return ido_process_response(ido_state, ef_type, ef_length, ef_data); }
+    if (ef_type == IDO_EF_TYPE_RESPONSE || ef_type == IDO_EF_AUTOKEY_RESPONSE) {
+        return ido_process_response(ido_state, ef_type, ef_length, ef_data);
+    }
 
     return false;
 }
@@ -215,9 +233,11 @@ bool ido_process(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length, const
  *
  * @return true if extension field is valid I-DO/Autokey, false otherwise
  */
-bool ido_process_skip(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length) {
+bool ido_process_skip(IdoState* ido_state, uint16_t ef_type,
+                      uint8_t ef_length) {
     /* Validate extension field type (I-DO or Autokey) */
-    if (ef_type != IDO_EF_TYPE_OFFER && ef_type != IDO_EF_TYPE_RESPONSE && ef_type != IDO_EF_AUTOKEY_OFFER && ef_type != IDO_EF_AUTOKEY_RESPONSE) {
+    if (ef_type != IDO_EF_TYPE_OFFER && ef_type != IDO_EF_TYPE_RESPONSE &&
+        ef_type != IDO_EF_AUTOKEY_OFFER && ef_type != IDO_EF_AUTOKEY_RESPONSE) {
         return false;
     }
 
@@ -233,7 +253,8 @@ bool ido_process_skip(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length) 
     /* Update state machine for tracking */
     if (ef_type == IDO_EF_TYPE_OFFER || ef_type == IDO_EF_AUTOKEY_OFFER) {
         ido_state->ido_offer_received = 1;
-    } else if (ef_type == IDO_EF_TYPE_RESPONSE || ef_type == IDO_EF_AUTOKEY_RESPONSE) {
+    } else if (ef_type == IDO_EF_TYPE_RESPONSE ||
+               ef_type == IDO_EF_AUTOKEY_RESPONSE) {
         ido_state->ido_response_sent = 1;
     }
 
@@ -282,17 +303,23 @@ uint8_t ido_state_machine(IdoState* ido_state, uint8_t event) {
     switch (event) {
     case IDO_EVENT_OFFER_RECEIVED:
         /* IDLE → OFFER_RECEIVED */
-        if (ido_state->ido_state == IDO_STATE_IDLE) { new_state = IDO_STATE_OFFER_RECEIVED; }
+        if (ido_state->ido_state == IDO_STATE_IDLE) {
+            new_state = IDO_STATE_OFFER_RECEIVED;
+        }
         break;
 
     case IDO_EVENT_RESPONSE_SENT:
         /* OFFER_RECEIVED → RESPONSE_SENT */
-        if (ido_state->ido_state == IDO_STATE_OFFER_RECEIVED) { new_state = IDO_STATE_RESPONSE_SENT; }
+        if (ido_state->ido_state == IDO_STATE_OFFER_RECEIVED) {
+            new_state = IDO_STATE_RESPONSE_SENT;
+        }
         break;
 
     case IDO_EVENT_AUTH_ESTABLISHED:
         /* RESPONSE_SENT → AUTHENTICATED */
-        if (ido_state->ido_state == IDO_STATE_RESPONSE_SENT) { new_state = IDO_STATE_AUTHENTICATED; }
+        if (ido_state->ido_state == IDO_STATE_RESPONSE_SENT) {
+            new_state = IDO_STATE_AUTHENTICATED;
+        }
         break;
 
     case IDO_EVENT_NEGOTIATION_FAILED:
@@ -306,7 +333,8 @@ uint8_t ido_state_machine(IdoState* ido_state, uint8_t event) {
     if (new_state != ido_state->ido_state) {
         uint8_t prev_state = ido_state->ido_state;
         ido_state->ido_state = new_state;
-        syslog(LOG_INFO, "I-DO/Autokey: State transition: %s → %s", ido_state_name(prev_state), ido_state_name(new_state));
+        syslog(LOG_INFO, "I-DO/Autokey: State transition: %s → %s",
+               ido_state_name(prev_state), ido_state_name(new_state));
     }
 
     return new_state;
@@ -330,8 +358,11 @@ void ido_log_state(const IdoState* ido_state) {
     syslog(LOG_INFO,
            "I-DO/Autokey: State: %s, Offer: %s, Response: %s, "
            "Capabilities: 0x%02X, KeyID: %u, Authenticated: %s",
-           ido_state_name(ido_state->ido_state), ido_state->ido_offer_received ? "yes" : "no", ido_state->ido_response_sent ? "yes" : "no",
-           ido_state->ido_capabilities, ido_state->ido_key_id, ido_state->ido_authenticated ? "yes" : "no");
+           ido_state_name(ido_state->ido_state),
+           ido_state->ido_offer_received ? "yes" : "no",
+           ido_state->ido_response_sent ? "yes" : "no",
+           ido_state->ido_capabilities, ido_state->ido_key_id,
+           ido_state->ido_authenticated ? "yes" : "no");
 }
 
 /**

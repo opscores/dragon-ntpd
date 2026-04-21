@@ -55,13 +55,17 @@ int network6_bind_to_port(int sock, uint16_t port);
 
 int network6_set_v6only(int sock, bool v6only);
 
-ssize_t network6_sendto(int sock, const void* buf, size_t len, const struct sockaddr_in6* dest);
+ssize_t network6_sendto(int sock, const void* buf, size_t len,
+                        const struct sockaddr_in6* dest);
 
-ssize_t network6_recvfrom(int sock, void* buf, size_t len, struct sockaddr_in6* src_addr);
+ssize_t network6_recvfrom(int sock, void* buf, size_t len,
+                          struct sockaddr_in6* src_addr);
 
-int network6_parse_address(const char* addr_str, uint16_t port, struct sockaddr_in6* addr);
+int network6_parse_address(const char* addr_str, uint16_t port,
+                           struct sockaddr_in6* addr);
 
-size_t network6_format_address(const struct sockaddr_in6* addr, char* buf, size_t buf_size);
+size_t network6_format_address(const struct sockaddr_in6* addr, char* buf,
+                               size_t buf_size);
 
 bool network6_is_loopback(const struct sockaddr_in6* addr);
 
@@ -69,15 +73,18 @@ bool network6_is_multicast(const struct sockaddr_in6* addr);
 
 bool network6_is_link_local(const struct sockaddr_in6* addr);
 
-bool network6_addresses_equal(const struct sockaddr_in6* a, const struct sockaddr_in6* b);
+bool network6_addresses_equal(const struct sockaddr_in6* a,
+                              const struct sockaddr_in6* b);
 
 int network6_enable_reuseaddr(int sock);
 
 int network6_set_timeout(int sock, int seconds);
 
-int network6_join_multicast(int sock, const char* group_addr, int interface_index);
+int network6_join_multicast(int sock, const char* group_addr,
+                            int interface_index);
 
-int network6_leave_multicast(int sock, const char* group_addr, int interface_index);
+int network6_leave_multicast(int sock, const char* group_addr,
+                             int interface_index);
 
 void network6_close_socket(int sock);
 

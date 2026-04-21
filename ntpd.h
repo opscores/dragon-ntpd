@@ -228,12 +228,12 @@ typedef struct {
  */
 
 typedef struct {
-    double precision;               /* Clock precision (ρ) - RFC 5905 */
-    double resolution;              /* Clock resolution (2^(-p)) */
-    double accuracy_estimate;       /* Clock accuracy estimate */
-    double stability_metric;        /* Clock stability metric (Allan variance) */
-    time_t last_update;             /* Last accuracy update time */
-    uint64_t offset_history[16];    /* Offset history for stability tracking */
+    double precision;            /* Clock precision (ρ) - RFC 5905 */
+    double resolution;           /* Clock resolution (2^(-p)) */
+    double accuracy_estimate;    /* Clock accuracy estimate */
+    double stability_metric;     /* Clock stability metric (Allan variance) */
+    time_t last_update;          /* Last accuracy update time */
+    uint64_t offset_history[16]; /* Offset history for stability tracking */
     time_t offset_history_time[16]; /* Corresponding times */
 } ClockAccuracyState;
 
