@@ -85,10 +85,10 @@ typedef struct {
  */
 
 /* Контекст потока пэера */
-static PeerThreadContext g_peer_ctx[MAX_PEERS];
+PeerThreadContext g_peer_ctx[MAX_PEERS];
 
 /* Контекст потока часов */
-static ClockThreadContext g_clock_ctx = {0};
+ClockThreadContext g_clock_ctx = {0};
 
 /* Флаги работы потоков пэеров (atomic для signal safety) */
 static atomic_bool g_peer_threads_running[MAX_PEERS];
@@ -433,6 +433,15 @@ static void update_system_clock(int64_t offset_us, int correction) {
  */
 static void* clock_thread_main(void* arg) {
     ClockThreadContext* ctx = (ClockThreadContext*)arg;
+
+    /* CERT C 3.4.5: Check g_server_count before using global data */
+    if (atomic_load_explicit(&g_server_count, memory_order_acquire) == 0) {
+        syslog(LOG_WARNING, "Clock thread started but no NTP servers configured.");
+        syslog(LOG_WARNING, "Clock thread will not perform synchronization.");
+        /* Выходим из цикла, если нет серверов */
+        atomic_store_explicit(&g_clock_thread_running, 0, memory_order_release);
+        return NULL;
+    }
 
     syslog(LOG_INFO, "Поток обработки часов запущен (интервал %d мс)", ctx->interval_ms);
 

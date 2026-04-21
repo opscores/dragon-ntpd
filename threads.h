@@ -2,8 +2,38 @@
 #define THREADS_H
 
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#include "ntpd.h"
+
+/* ============================================================================
+ * Thread Context Structures (RFC 5905 Section 5)
+ * ============================================================================
+ */
+
+typedef struct {
+    int interval_ms;
+    pthread_mutex_t clock_mutex;
+    pthread_cond_t clock_cond;
+    bool running;
+    pthread_t thread_id;
+    int64_t last_offset_us;
+    int last_correction;
+} ClockThreadContext;
+
+typedef struct {
+    int idx;
+    int sock_fd;
+    char ip[INET_ADDRSTRLEN];
+    char port[16];
+    pthread_mutex_t sock_mutex;
+    struct sockaddr_storage client_addr_storage;
+    socklen_t client_addr_len;
+    PeerState* peer_state;
+    atomic_bool sock_valid;
+} PeerThreadContext;
 
 /* ============================================================================
  * Peer Thread Functions
@@ -38,5 +68,13 @@ int clock_thread_get_last_correction(void);
  */
 
 /* Note: start_ntpq_thread() is declared in socket.h */
+
+/* ============================================================================
+ * Thread Context Global Variables
+ * ============================================================================
+ */
+
+extern ClockThreadContext g_clock_ctx;
+extern PeerThreadContext g_peer_ctx[MAX_PEERS];
 
 #endif /* THREADS_H */

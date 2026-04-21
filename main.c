@@ -308,13 +308,18 @@ int main(int argc, char* argv[]) {
            g_local_precision >= 0 ? (double)(1 << g_local_precision) : (double)1.0 / (double)(1LL << (-g_local_precision)));
 
     g_server_count = load_server_config();
-    if (g_server_count == 0) {
+
+    /* CERT C 3.4.5: Use parameter for boundary check instead of magic number */
+    if (g_server_count <= 0) {
         const char* cfg_path = g_cli.config_file ? g_cli.config_file : CONFIG_FILE;
-        fprintf(stderr, "ERROR: No servers in %s\n", cfg_path);
+        syslog(LOG_WARNING, "No NTP servers configured in %s", cfg_path);
+        syslog(LOG_WARNING, "Clock thread disabled (no servers for synchronization).");
+        syslog(LOG_WARNING, "Peer thread running (accepting incoming requests only)");
         closelog();
         return EXIT_FAILURE;
     }
 
+    /* RFC 5905 Section 5: Server mode - both clock and peer threads */
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = signal_handler;
@@ -366,29 +371,38 @@ int main(int argc, char* argv[]) {
 
     syslog(LOG_NOTICE, "=====================================================================");
     int sync_interval_1 = g_cli.timeout_sec > 0 ? g_cli.timeout_sec : SYNC_INTERVAL_SECONDS;
-    syslog(LOG_NOTICE, "Сервер NTP запущен. Обнаружено %d серверов. Интервал: %d сек.", g_server_count, sync_interval_1);
-    syslog(LOG_NOTICE, "=====================================================================");
 
-    /* Запуск потока коррекции часов (RFC 5905 Section 5) */
-    if (start_clock_thread(sync_interval_1) != 0) {
-        syslog(LOG_CRIT, "Не удалось запустить поток коррекции часов");
-    } else {
+    /* RFC 5905 Section 5.2: Clock thread only if servers configured */
+    if (g_server_count > 0) {
+        syslog(LOG_NOTICE, "Сервер NTP запущен. Обнаружено %d серверов. Интервал: %d сек.", g_server_count, sync_interval_1);
+
+        /* Запуск потока коррекции часов (RFC 5905 Section 5.2) */
+        if (start_clock_thread(sync_interval_1) != 0) {
+            syslog(LOG_CRIT, "Не удалось запустить поток коррекции часов");
+            cleanup_resources();
+            return EXIT_FAILURE;
+        }
         syslog(LOG_INFO, "Поток коррекции часов запущен (интервал %d сек)", sync_interval_1);
+    } else {
+        /* RFC 5905 Section 5.1: Peer thread for incoming requests only */
+        syslog(LOG_NOTICE, "Running in server-only mode (no external servers for synchronization).");
     }
 
-    /* Запуск потока обработки пэеров (RFC 5905 Section 5) */
+    /* RFC 5905 Section 5.1: Peer thread always runs for incoming requests */
     int peer_sock = create_udp_socket(NTP_PORT);
     if (peer_sock >= 0) {
-        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer pool
-         */
+        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer pool */
         if (start_peer_thread(peer_sock, "0.0.0.0", "123", NULL, 0) != 0) {
             syslog(LOG_CRIT, "Не удалось запустить поток обработки пэеров");
             close_socket(peer_sock);
-        } else {
-            syslog(LOG_INFO, "Поток обработки пэеров запущен (сокет %d)", peer_sock);
+            cleanup_resources();
+            return EXIT_FAILURE;
         }
+        syslog(LOG_INFO, "Поток обработки пэеров запущен (сокет %d)", peer_sock);
     } else {
         syslog(LOG_WARNING, "Не удалось создать сокет для потока пэеров");
+        cleanup_resources();
+        return EXIT_FAILURE;
     }
 
     /* Запуск TCP listener для ntpq (RFC 5905 Section 6) */
@@ -404,6 +418,20 @@ int main(int argc, char* argv[]) {
     }
 
     while (!g_shutdown_requested) {
+        /* RFC 5905 Section 5.1: Check if any servers are configured before sync loop */
+        if (g_server_count == 0) {
+            syslog(LOG_WARNING, "No NTP servers configured - skipping synchronization loop.");
+            syslog(LOG_WARNING, "Server is running in request-handling mode only.");
+            /* В цикле ждём shutdown без синхронизации (peer thread обрабатывает запросы) */
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            ts.tv_sec += 1; /* Ждём 1 секунду */
+            pthread_mutex_lock(&g_clock_ctx.clock_mutex);
+            pthread_cond_timedwait(&g_clock_ctx.clock_cond, &g_clock_ctx.clock_mutex, &ts);
+            pthread_mutex_unlock(&g_clock_ctx.clock_mutex);
+            continue;
+        }
+
         syslog(LOG_INFO, "--- Начинается цикл синхронизации времени ---");
 
         bool all_success = true;

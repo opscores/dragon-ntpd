@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -130,6 +131,11 @@
 #define LEAP_SECOND_CHECK_INTERVAL_SEC 300
 
 /* ============================================================================
+ * Thread Context Structures (RFC 5905 Section 5)
+ * ============================================================================
+ */
+
+/* ============================================================================
  * Type Definitions
  * ============================================================================
  */
@@ -189,6 +195,23 @@ typedef struct {
     char port[16];
 } PeerRequestData;
 
+typedef struct {
+    char* config_file;
+    char* pid_file;
+    char* log_file;
+    char* run_user;
+    char* interface;
+    int foreground;
+    int debug_level;
+    int no_daemonize;
+    int timeout_sec;
+    int quit_after_sync;
+    int family_preference;
+    int broadcast_mode;
+    char* broadcast_addr;
+    int broadcast_interval;
+} CliConfig;
+
 /* Clock discipline states */
 #define FREQ_STATE_NSET 0
 #define FREQ_STATE_FSET 1
@@ -223,25 +246,6 @@ typedef struct {
     time_t last_apply_time;   /* Last apply time */
 } FreqState;
 
-typedef struct {
-    char* config_file;
-    char* pid_file;
-    char* log_file;
-    char* run_user;
-    char* interface;
-    int foreground;
-    int debug_level;
-    int no_daemonize;
-    int timeout_sec;
-    int quit_after_sync;
-    int family_preference; /* 0=dual-stack, 1=IPv4-only, 2=IPv6-only */
-
-    /* RFC 5905 Section 5.2 - Broadcast mode */
-    int broadcast_mode;     /* 0=disabled, 1=enabled */
-    char* broadcast_addr;   /* Custom broadcast address (NULL = default) */
-    int broadcast_interval; /* Interval in seconds (32-128, default: 64) */
-} CliConfig;
-
 /* ============================================================================
  * RFC 5905 Section 7.4 - Clock Accuracy State
  * ============================================================================
@@ -266,6 +270,8 @@ extern ServerConfig* g_servers;
 extern int g_server_count;
 extern NtpSample g_samples[MAX_SAMPLES];
 extern int g_sample_count;
+
+/* Thread contexts are declared in threads.h */
 
 /* RFC 5905 Section 11.2.1 - Byzantine Fault Detection */
 extern PeerState g_peer_pool[MAX_PEERS];
