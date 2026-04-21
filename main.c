@@ -385,13 +385,15 @@ int main(int argc, char* argv[]) {
         syslog(LOG_INFO, "Поток коррекции часов запущен (интервал %d сек)", sync_interval_1);
     } else {
         /* RFC 5905 Section 5.1: Peer thread for incoming requests only */
-        syslog(LOG_NOTICE, "Running in server-only mode (no external servers for synchronization).");
+        syslog(LOG_NOTICE, "Running in server-only mode (no external servers for "
+                           "synchronization).");
     }
 
     /* RFC 5905 Section 5.1: Peer thread always runs for incoming requests */
     int peer_sock = create_udp_socket(NTP_PORT);
     if (peer_sock >= 0) {
-        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer pool */
+        /* RFC 5905 Section 11.2.1: Multi-server integration - initialize peer pool
+         */
         if (start_peer_thread(peer_sock, "0.0.0.0", "123", NULL, 0) != 0) {
             syslog(LOG_CRIT, "Не удалось запустить поток обработки пэеров");
             close_socket(peer_sock);
@@ -418,11 +420,13 @@ int main(int argc, char* argv[]) {
     }
 
     while (!g_shutdown_requested) {
-        /* RFC 5905 Section 5.1: Check if any servers are configured before sync loop */
+        /* RFC 5905 Section 5.1: Check if any servers are configured before sync
+         * loop */
         if (g_server_count == 0) {
             syslog(LOG_WARNING, "No NTP servers configured - skipping synchronization loop.");
             syslog(LOG_WARNING, "Server is running in request-handling mode only.");
-            /* В цикле ждём shutdown без синхронизации (peer thread обрабатывает запросы) */
+            /* В цикле ждём shutdown без синхронизации (peer thread обрабатывает
+             * запросы) */
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
             ts.tv_sec += 1; /* Ждём 1 секунду */
