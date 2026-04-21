@@ -48,6 +48,9 @@ endif
 .PHONY: all debug release asan ubsan clean tidy format check lint lint-fix
 
 all: release
+	@echo "=== Checking format ==="
+	clang-format -Werror -dry-run -style=LLVM $(ALL_SRC) $(ALL_HDR)
+	@echo "=== Format check passed ==="
 
 debug:
 	$(MAKE) BUILD_TYPE=debug $(TARGET)
@@ -89,7 +92,9 @@ check: release
 	@echo "=== Testing dntpd ===" && \
 	./$(TARGET) -h && \
 	./$(TARGET) -v && \
-	./$(TARGET) -h 2>&1 | head -1
+	@echo "=== Checking format ===" && \
+	clang-format -style=LLVM -Werror-dry-run $(ALL_SRC) $(ALL_HDR) && \
+	@echo "=== Format check passed ==="
 
 clean:
 	rm -f $(TARGET)
