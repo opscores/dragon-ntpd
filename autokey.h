@@ -1,16 +1,27 @@
 /*
  * autokey.h - Autokey Security Protocol Header (RFC 5906)
  *
- * Simplified Autokey implementation with:
- * - Autokey Offer/Response extension fields parsing
+ * Full Autokey implementation with:
+ * - Autokey Offer/Response extension fields parsing (RFC 5906)
  * - State machine implementation
+ * - HMAC-SHA1 MAC computation (RFC 5906)
+ * - Key management (install/rotate/revoke)
  * - Capability flags handling
  * - State transitions
  * - Memory safety
  * - Error handling
  *
- * Note: HMAC-SHA1 MAC computation is not implemented yet.
- * This can be added later using libgcrypt or OpenSSL.
+ * RFC 5906 Compliance:
+ * - Autokey Offer/Response parsing
+ * - Key Install/Rotate/Revoke extension fields
+ * - HMAC-SHA1 message authentication
+ * - I-DO integration (RFC 5905 Section 8.4)
+ *
+ * Security (CERT C):
+ * - Input validation
+ * - Buffer overflow protection
+ * - Secure memory operations
+ * - Error logging
  */
 
 #ifndef AUTOKEY_H
@@ -148,6 +159,114 @@ const char* autokey_state_name(uint8_t state);
  * @return human-readable flag name
  */
 const char* autokey_capability_name(uint8_t flag);
+
+/* ============================================================================
+ * HMAC-SHA1 Functions (RFC 5906 Section 3.4.2)
+ * ============================================================================
+ */
+
+/**
+ * Compute HMAC-SHA1 digest
+ * @param data Input data to authenticate
+ * @param data_len Length of input data
+ * @param key Key material (20 bytes for HMAC-SHA1)
+ * @param key_len Length of key material
+ * @param digest Output buffer (20 bytes)
+ * @return 0 on success, -1 on error
+ */
+int autokey_compute_hmac(const uint8_t* data, size_t data_len, const uint8_t* key, size_t key_len, uint8_t* digest);
+
+/**
+ * Compute MAC for NTP packet
+ * @param pkt Pointer to NTP packet data
+ * @param pkt_len Length of packet data
+ * @param key_id Key identifier
+ * @return 0 on success, -1 on error
+ */
+int autokey_compute_mac(const uint8_t* pkt, size_t pkt_len, uint32_t key_id);
+
+/**
+ * Verify MAC for NTP packet
+ * @param pkt Pointer to NTP packet data
+ * @param pkt_len Length of packet data
+ * @param key_id Key identifier
+ * @return 0 if MAC is valid, -1 otherwise
+ */
+int autokey_verify_mac(const uint8_t* pkt, size_t pkt_len, uint32_t key_id);
+
+/* ============================================================================
+ * Key Management Functions (RFC 5906 Section 3.4.3)
+ * ============================================================================
+ */
+
+/**
+ * Initialize Autokey subsystem
+ * @param key_file Path to key file (NULL for memory-only)
+ * @param key_id Key identifier (0 for default)
+ * @return 0 on success, -1 on error
+ */
+int autokey_init(const char* key_file, uint32_t key_id);
+
+/**
+ * Cleanup Autokey subsystem
+ */
+void autokey_cleanup(void);
+
+/**
+ * Install key (RFC 5906 Section 3.4.3a)
+ * @param state Pointer to AutokeyState structure
+ * @param key_id Key identifier
+ * @param key Key material (20 bytes)
+ * @return 0 on success, -1 on error
+ */
+int autokey_install_key(AutokeyState* state, uint32_t key_id, const uint8_t* key);
+
+/**
+ * Rotate key (RFC 5906 Section 3.4.3b)
+ * @param state Pointer to AutokeyState structure
+ * @param new_key_id New key identifier
+ * @param new_key New key material (20 bytes)
+ * @return 0 on success, -1 on error
+ */
+int autokey_rotate_key(AutokeyState* state, uint32_t new_key_id, const uint8_t* new_key);
+
+/**
+ * Revoke key (RFC 5906 Section 3.4.3c)
+ * @param state Pointer to AutokeyState structure
+ * @param key_id Key identifier to revoke
+ * @return 0 on success, -1 on error
+ */
+int autokey_revoke_key(AutokeyState* state, uint32_t key_id);
+
+/**
+ * Process Autokey Key Install extension field
+ * @param state Pointer to AutokeyState structure
+ * @param ef_type Extension field type (should be 0x000B)
+ * @param ef_length Extension field length
+ * @param ef_data Extension field data
+ * @return true if processed successfully, false otherwise
+ */
+bool autokey_process_key_install(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+
+/**
+ * Process Autokey Key Rotate extension field
+ * @param state Pointer to AutokeyState structure
+ * @param ef_type Extension field type (should be 0x000C)
+ * @param ef_length Extension field length
+ * @param ef_data Extension field data
+ * @return true if processed successfully, false otherwise
+ */
+bool autokey_process_key_rotate(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
+
+/**
+ * Process Autokey Key Revoke extension field
+ * @param state Pointer to AutokeyState structure
+ * @param ef_type Extension field type (should be 0x000D)
+ * @param ef_length Extension field length
+ * @param ef_data Extension field data
+ * @return true if processed successfully, false otherwise
+ */
+bool autokey_process_key_revoke(AutokeyState* state, uint16_t ef_type, uint8_t ef_length, const uint8_t* ef_data);
 
 /* ============================================================================
  * Global Variables

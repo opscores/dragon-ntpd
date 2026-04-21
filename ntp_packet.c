@@ -1,4 +1,5 @@
 #include "ntp_packet.h"
+#include "autokey.h"
 #include "ido.h"
 #include "ntp_algorithms.h"
 #include "ntpd.h"
@@ -330,6 +331,38 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
             else if (field_type == NTP_EF_NTS_AEEF_REQ || field_type == NTP_EF_NTS_AEEF_RESP) {
                 process_nts_aeef(data + 4, field_len - 4);
             }
+
+            pos += field_len;
+            skipped += field_len;
+            continue;
+        }
+
+        /* Autokey Key Install/Rotate/Revoke extension fields (RFC 5906) */
+        if (field_type == NTP_EF_AUTOKEY_KEY_INSTALL || field_type == NTP_EF_AUTOKEY_KEY_ROTATE || field_type == NTP_EF_AUTOKEY_KEY_REVOKE) {
+            syslog(LOG_DEBUG, "Autokey Key Install/Rotate/Revoke extension field at offset %zu", pos);
+
+            /* Use autokey_process_skip() for tracking Autokey fields without full processing */
+            bool ret_skip = autokey_process_skip(&g_autokey_state, field_type, (uint8_t)(field_len - 4));
+            if (!ret_skip) { syslog(LOG_WARNING, "Autokey skip processing failed"); }
+
+            /* Process Key Install */
+            if (field_type == NTP_EF_AUTOKEY_KEY_INSTALL) {
+                bool ret_install = autokey_process_key_install(&g_autokey_state, field_type, (uint8_t)(field_len - 4), data + pos + 4);
+                if (!ret_install) { syslog(LOG_WARNING, "Autokey Key Install processing failed"); }
+            }
+            /* Process Key Rotate */
+            else if (field_type == NTP_EF_AUTOKEY_KEY_ROTATE) {
+                bool ret_rotate = autokey_process_key_rotate(&g_autokey_state, field_type, (uint8_t)(field_len - 4), data + pos + 4);
+                if (!ret_rotate) { syslog(LOG_WARNING, "Autokey Key Rotate processing failed"); }
+            }
+            /* Process Key Revoke */
+            else if (field_type == NTP_EF_AUTOKEY_KEY_REVOKE) {
+                bool ret_revoke = autokey_process_key_revoke(&g_autokey_state, field_type, (uint8_t)(field_len - 4), data + pos + 4);
+                if (!ret_revoke) { syslog(LOG_WARNING, "Autokey Key Revoke processing failed"); }
+            }
+
+            /* Log Autokey state */
+            autokey_log_state(&g_autokey_state);
 
             pos += field_len;
             skipped += field_len;

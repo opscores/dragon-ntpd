@@ -16,7 +16,7 @@ CSTD := -std=c11
 WARN := -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wformat=2 -Wundef
 BASE_CFLAGS := $(CSTD) $(WARN)
 BASE_LDFLAGS :=
-LDLIBS := -lm -lpthread
+LDLIBS := -lm -lpthread -lgcrypt
 
 # Security flags (only for release)
 SECURITY_CFLAGS := -fstack-protector-strong -fPIE -D_FORTIFY_SOURCE=2

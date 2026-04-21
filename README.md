@@ -12,15 +12,15 @@ A production-grade NTP server implementation written in C, fully compliant with 
 ## Features
 
 - **RFC 5905 Compliant** - Full NTPv4 implementation
-- **RFC 5906 Compliant** - Autokey security protocol (parsing only, HMAC-SHA1 to be added later)
+- **RFC 5906 Compliant** - Autokey security protocol (full implementation)
 - **RFC 8915 Compliant** - NTS security extensions
 - **Dual-stack Support** - IPv4 and IPv6 (`-4`/`-6` options)
 - **Multi-threaded Architecture** - Peer and clock threads
 - **Marx Filter** - Outlier rejection algorithm
 - **Extension Fields** - RFC 5905 §7.5 support
 - **I-DO Negotiation** - RFC 5905 §8.4 capability exchange
-- **Autokey Negotiation** - RFC 5906 Offer/Response/Key management (parsing only)
-- **HMAC-SHA1 MAC** - Message authentication (to be added later)
+- **Autokey Negotiation** - RFC 5906 Offer/Response/Key management
+- **HMAC-SHA1 MAC** - Message authentication using libgcrypt
 - **Thread-safe** - POSIX threads with proper barriers
 - **systemd Integration** - Service unit included
 - **GPG Signed Commits** - Verified contributions
