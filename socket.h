@@ -127,6 +127,16 @@ typedef struct {
     bool enable_transition; /* Enable transition mechanisms */
 } NetworkConfig;
 
+/**
+ * Peer Request Data (for thread passing)
+ */
+typedef struct {
+    void* buffer;
+    size_t size;
+    char ip[INET_ADDRSTRLEN];
+    char port[16];
+} PeerRequestData;
+
 /* Global socket descriptor for NTP sync operations */
 extern int g_sync_sock;
 

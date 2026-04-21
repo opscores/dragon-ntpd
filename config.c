@@ -1,9 +1,11 @@
+#define _GNU_SOURCE
 /*
  * config.c - Command line argument parsing
  *
  * POSIX-compatible argument parsing with CERT C security compliance
  */
 
+#include "config.h"
 #include "ntpd.h"
 #include <arpa/inet.h>
 #include <errno.h>

@@ -32,6 +32,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "config.h"
 #include "ido.h"
 
 #ifndef SSIZE_MAX
@@ -188,30 +189,6 @@ typedef struct {
     IdoState ido_state;
 } PeerState;
 
-typedef struct {
-    void* buffer;
-    size_t size;
-    char ip[INET_ADDRSTRLEN];
-    char port[16];
-} PeerRequestData;
-
-typedef struct {
-    char* config_file;
-    char* pid_file;
-    char* log_file;
-    char* run_user;
-    char* interface;
-    int foreground;
-    int debug_level;
-    int no_daemonize;
-    int timeout_sec;
-    int quit_after_sync;
-    int family_preference;
-    int broadcast_mode;
-    char* broadcast_addr;
-    int broadcast_interval;
-} CliConfig;
-
 /* Clock discipline states */
 #define FREQ_STATE_NSET 0
 #define FREQ_STATE_FSET 1
@@ -291,8 +268,6 @@ extern int8_t g_local_precision;
 extern int8_t g_local_poll;
 extern int8_t g_peer_poll;
 extern FreqState g_freq_state;
-
-extern CliConfig g_cli;
 
 extern pthread_mutex_t g_mutex;
 

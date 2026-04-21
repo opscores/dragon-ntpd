@@ -10,7 +10,29 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ntpd.h"
+/* ============================================================================
+ * Type Definitions
+ * ============================================================================
+ */
+
+typedef struct {
+    char* config_file;
+    char* pid_file;
+    char* log_file;
+    char* run_user;
+    char* interface;
+    int foreground;
+    int debug_level;
+    int no_daemonize;
+    int timeout_sec;
+    int quit_after_sync;
+    int family_preference;
+    int broadcast_mode;
+    char* broadcast_addr;
+    int broadcast_interval;
+} CliConfig;
+
+extern CliConfig g_cli;
 
 /* ============================================================================
  * CLI Functions
