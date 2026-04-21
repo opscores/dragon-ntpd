@@ -7,6 +7,7 @@
 #include "ntp_algorithms.h"
 #include "ntp_packet.h"
 #include "ntpd.h"
+#include "reference_clock.h"
 #include "socket.h"
 #include "threads.h"
 #include <sys/timex.h>
@@ -109,6 +110,10 @@ int init_frequency_discipline(void) {
 
     /* RFC 5905 Section 7.4: Initialize clock accuracy state */
     init_clock_accuracy();
+
+    /* RFC 5905 Section 5.1: Initialize reference clock */
+    reference_clock_init();
+
     g_freq_state.last_applied_ppm = 0;
     g_freq_state.last_apply_time = 0;
     return 0;
