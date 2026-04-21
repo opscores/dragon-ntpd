@@ -1,15 +1,12 @@
 /*
  * autokey.h - Autokey Security Protocol Header (RFC 5906)
  *
- * Full Autokey implementation with:
- * - Autokey Offer/Response extension fields parsing (RFC 5906)
- * - State machine implementation
- * - HMAC-SHA1 MAC computation (RFC 5906)
- * - Key management (install/rotate/revoke)
- * - Capability flags handling
- * - State transitions
- * - Memory safety
- * - Error handling
+ * IMPORTANT: Autokey is an extension of I-DO (RFC 5905 Section 8.4).
+ * According to RFC, they share the same state machine.
+ * We use IdoState structure for both I-DO and Autokey.
+ *
+ * This header provides compatibility macros and functions
+ * that wrap IdoState with Autokey naming conventions.
  *
  * RFC 5906 Compliance:
  * - Autokey Offer/Response parsing
@@ -27,47 +24,63 @@
 #ifndef AUTOKEY_H
 #define AUTOKEY_H
 
+#include "ido.h"
 #include "ntpd.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 /* ============================================================================
- * Autokey State Machine States
+ * Autokey State Machine States (alias to IdoState_t)
  * ============================================================================
  */
 
 typedef enum {
-    AUTOKEY_STATE_IDLE = 0,
-    AUTOKEY_STATE_OFFER_RECEIVED,
-    AUTOKEY_STATE_RESPONSE_SENT,
-    AUTOKEY_STATE_AUTHENTICATED,
-    AUTOKEY_STATE_REJECTED
+    AUTOKEY_STATE_IDLE = IDO_STATE_IDLE,
+    AUTOKEY_STATE_OFFER_RECEIVED = IDO_STATE_OFFER_RECEIVED,
+    AUTOKEY_STATE_RESPONSE_SENT = IDO_STATE_RESPONSE_SENT,
+    AUTOKEY_STATE_AUTHENTICATED = IDO_STATE_AUTHENTICATED,
+    AUTOKEY_STATE_REJECTED = IDO_STATE_REJECTED
 } AutokeyState_t;
 
 /* ============================================================================
- * Autokey Capability Flags
+ * Autokey Capability Flags (alias to IDO_CAP_*)
  * ============================================================================
  */
 
-#define AUTOKEY_CAP_OFFER (0x01)    /* Peer offers authentication */
-#define AUTOKEY_CAP_RESPONSE (0x02) /* Client responds to offer */
-#define AUTOKEY_CAP_RESERVED (0x04) /* Reserved for future use */
+#define AUTOKEY_CAP_OFFER IDO_CAP_OFFER
+#define AUTOKEY_CAP_RESPONSE IDO_CAP_RESPONSE
+#define AUTOKEY_CAP_RESERVED IDO_CAP_RESERVED
 
 /* ============================================================================
  * Autokey State Structure
  * ============================================================================
+ *
+ * NOTE: Autokey uses IdoState structure directly.
+ * This is per RFC 5906 which states Autokey is an extension of I-DO.
+ * We provide typedef alias for source code compatibility.
  */
 
-typedef struct {
-    uint8_t autokey_state;          /* Current state machine state */
-    uint8_t autokey_offer_received; /* Autokey Offer received from peer */
-    uint8_t autokey_response_sent;  /* Autokey Response sent to peer */
-    uint8_t autokey_capabilities;   /* Capability flags */
-    uint8_t autokey_key_id;         /* Key identifier (Autokey) */
-    uint8_t autokey_key[20];        /* HMAC-SHA1 key (20 bytes) */
-    uint8_t autokey_enabled;        /* Autokey enabled flag */
-    uint8_t autokey_authenticated;  /* Authentication established */
-} AutokeyState;
+typedef IdoState AutokeyState;
+
+/* ============================================================================
+ * Compatibility Macros
+ * ============================================================================
+ *
+ * These macros map autokey_* field access to ido_* field access
+ * for backward compatibility with existing code.
+ */
+
+#define g_autokey_state g_ido_state
+
+/* Field access compatibility macros */
+#define autokey_state ido_state
+#define autokey_offer_received ido_offer_received
+#define autokey_response_sent ido_response_sent
+#define autokey_capabilities ido_capabilities
+#define autokey_key_id ido_key_id
+#define autokey_key ido_key
+#define autokey_enabled ido_enabled
+#define autokey_authenticated ido_authenticated
 
 /* ============================================================================
  * Autokey State Machine Functions
@@ -271,8 +284,10 @@ bool autokey_process_key_revoke(AutokeyState* state, uint16_t ef_type, uint8_t e
 /* ============================================================================
  * Global Variables
  * ============================================================================
+ *
+ * NOTE: We use g_ido_state from ido.h for both I-DO and Autokey.
+ * This is per RFC 5906 which defines Autokey as extension of I-DO.
+ * The g_autokey_state macro maps to g_ido_state for code compatibility.
  */
-
-extern AutokeyState g_autokey_state;
 
 #endif /* AUTOKEY_H */

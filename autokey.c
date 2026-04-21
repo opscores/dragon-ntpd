@@ -788,9 +788,7 @@ bool autokey_process_key_revoke(AutokeyState* state, uint16_t ef_type, uint8_t e
     return true;
 }
 
-/* ============================================================================
- * Global Variables
- * ============================================================================
+/*
+ * NOTE: Autokey uses IdoState from main.c
+ * via g_autokey_state macro defined in autokey.h
  */
-
-AutokeyState g_autokey_state;
