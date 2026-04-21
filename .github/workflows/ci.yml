@@ -20,6 +20,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgcrypt20-dev libssl-dev
+
       - name: Install pre-commit
         run: |
           pip install pre-commit
