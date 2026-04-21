@@ -12,11 +12,15 @@ A production-grade NTP server implementation written in C, fully compliant with 
 ## Features
 
 - **RFC 5905 Compliant** - Full NTPv4 implementation
+- **RFC 5906 Compliant** - Autokey security protocol (parsing only, HMAC-SHA1 to be added later)
+- **RFC 8915 Compliant** - NTS security extensions
 - **Dual-stack Support** - IPv4 and IPv6 (`-4`/`-6` options)
 - **Multi-threaded Architecture** - Peer and clock threads
 - **Marx Filter** - Outlier rejection algorithm
 - **Extension Fields** - RFC 5905 §7.5 support
 - **I-DO Negotiation** - RFC 5905 §8.4 capability exchange
+- **Autokey Negotiation** - RFC 5906 Offer/Response/Key management (parsing only)
+- **HMAC-SHA1 MAC** - Message authentication (to be added later)
 - **Thread-safe** - POSIX threads with proper barriers
 - **systemd Integration** - Service unit included
 - **GPG Signed Commits** - Verified contributions
@@ -162,13 +166,13 @@ panic_threshold 1000
 
 ### Module Responsibilities
 
-| Module | RFC 5905 | Responsibility | Dependencies |
-|--------|----------|----------------|--------------|
+| Module | RFC | Responsibility | Dependencies |
+|--------|-----|----------------|--------------|
 | `ntpd.h/c` | — | Base types, constants, globals, common utilities | None (system headers only) |
-| `ido.h/c` | §8.4 | I-DO capability negotiation | None |
-| `ntp_packet.h/c` | §7.3, §7.5, §8.3 | Packet parsing, extension fields | `ntpd.h`, `ido.h` |
+| `ido.h/c` | §8.4 | I-DO/Autokey capability negotiation | None |
+| `ntp_packet.h/c` | §7.3, §7.5, §8.3 | Packet parsing, extension fields, MAC | `ntpd.h`, `ido.h`, `autokey.h` |
 | `ntp_algorithms.h/c` | §11.2.1, §6 | Byzantine fault detection, peer selection | `ntpd.h` |
-| `filter.h/c` | §10 | MARX filter, outlier rejection | `ntpd.h` |
+| `filter.h/c` | §10 | Marx filter, outlier rejection | `ntpd.h` |
 | `time_sync.h/c` | §11.3, §11.4 | Clock discipline, leap second, sync | `ntpd.h` |
 | `leap_second.h/c` | §11.4 | Leap second file handling | None |
 | `threads.h/c` | §5 | Peer & clock threads | None |
@@ -176,6 +180,7 @@ panic_threshold 1000
 | `network4.h/c` | §5 | IPv4 operations | None |
 | `network6.h/c` | §5, §6 | IPv6 operations | None |
 | `mode_handler.h/c` | §7.2, §8 | ACL, rate limiting, security | None |
+| `autokey.h/c` | §8.4, RFC 5906 | Autokey security protocol, HMAC-SHA1 (parsing only) | `ntpd.h`, `ido.h` |
 | `main.c` | — | Entry point, main loop | All modules |
 | `config.c` | — | CLI parsing, configuration | `ntpd.h` |
 

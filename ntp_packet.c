@@ -19,22 +19,47 @@
 /* read_u32be() and write_u32be() are declared in ntp_packet.h and defined in ntpd.c */
 
 /* ============================================================================
- * I-DO Capability Negotiation Functions (RFC 5905 Section 8.4)
+ * Extension Field Types (RFC 5905 Section 7.5)
  * ============================================================================
  */
-#define NTP_EF_CRYPTO_NAK 0x0000    /* Crypto-NAK: authentication failure */
-#define NTP_EF_MAC 0x0003           /* Legacy MAC */
+
+/* Crypto-NAK: authentication failure (RFC 5905 Section 7.2) */
+#define NTP_EF_CRYPTO_NAK 0x0000
+
+/* Legacy MAC authentication (RFC 5905) */
+#define NTP_EF_MAC 0x0003
+
+/* I-DO Offer/Response (RFC 5905 Section 8.4) */
 #define NTP_EF_I_DO_OFFER 0x0007    /* I-DO Offer */
 #define NTP_EF_I_DO_RESPONSE 0x8007 /* I-DO Response */
-#define NTP_EF_LAST_EF 0x0008       /* Last Extension Field */
-#define NTP_EF_CHECKSUM_COMP 0x0005 /* Checksum Complement */
-#define NTP_EF_NTS_UID_REQ 0x0104   /* NTS Unique Identifier Request */
-#define NTP_EF_NTS_UID_RESP 0x8104  /* NTS Unique Identifier Response */
-#define NTP_EF_NTS_COOKIE 0x0204    /* NTS Cookie */
-#define NTP_EF_NTS_COOKIE_PH 0x0304 /* NTS Cookie Placeholder */
-#define NTP_EF_NTS_AEEF_REQ 0x0404  /* NTS AEEF Request */
-#define NTP_EF_NTS_AEEF_RESP 0x8404 /* NTS AEEF Response */
-#define NTP_EF_KOD 0x0000           /* Kiss-o'-Death marker */
+
+/* LAST-EF marker (RFC 5905) */
+#define NTP_EF_LAST_EF 0x0008
+
+/* Checksum Complement (RFC 5905) */
+#define NTP_EF_CHECKSUM_COMP 0x0005
+
+/* NTS Unique Identifier Request (RFC 8915) */
+#define NTP_EF_NTS_UID_REQ 0x0104
+
+/* NTS Unique Identifier Response (RFC 8915) */
+#define NTP_EF_NTS_UID_RESP 0x8104
+
+/* NTS Cookie (RFC 8915) */
+#define NTP_EF_NTS_COOKIE 0x0204
+
+/* NTS Cookie Placeholder (RFC 8915) */
+#define NTP_EF_NTS_COOKIE_PH 0x0304
+
+/* NTS AEEF Request (RFC 8915) */
+#define NTP_EF_NTS_AEEF_REQ 0x0404
+
+/* NTS AEEF Response (RFC 8915) */
+#define NTP_EF_NTS_AEEF_RESP 0x8404
+
+/* Kiss-o'-Death marker (RFC 5905 Section 8.3) */
+/* Type=0, Length=2 indicates Crypto-NAK/authentication failure */
+#define NTP_EF_KOD_MARKER 0x0000
 
 /**
  * Extension field header format (RFC 5905 Section 2.1):
@@ -404,6 +429,12 @@ bool parse_ntp_packet(const void* buffer, size_t size, NtpPacket* pkt) {
     pkt->recv_ts.frac = read_u32be(&data[36]);
     pkt->xmit_ts.sec = read_u32be(&data[40]);
     pkt->xmit_ts.frac = read_u32be(&data[44]);
+
+    /* Read MAC fields if present (RFC 5905 Section 7.5) */
+    if (size > 68) {
+        pkt->key_id = data[64];
+        memcpy(&pkt->mac_digest, &data[65], 20);
+    }
 
     uint8_t li = (uint8_t)((pkt->li_vn_mode & NTP_LI_MASK) >> NTP_LI_SHIFT);
     uint8_t vn = (uint8_t)((pkt->li_vn_mode & NTP_VN_MASK) >> NTP_VN_SHIFT);

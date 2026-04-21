@@ -6,8 +6,8 @@ CC ?= cc
 TARGET := dntpd
 BUILD_TYPE ?= release
 
-SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c mode_handler.c network4.c network6.c leap_second.c reference_clock.c ntpd.c
-HDR := ntpd.h config.h main.h threads.h mode_handler.h network4.h network6.h ido.h socket.h ntp_packet.h ntp_algorithms.h time_sync.h filter.h leap_second.h reference_clock.h
+SRC := main.c config.c ntp_packet.c ntp_algorithms.c filter.c time_sync.c socket.c threads.c ido.c mode_handler.c network4.c network6.c leap_second.c reference_clock.c ntpd.c autokey.c
+HDR := ntpd.h config.h main.h threads.h mode_handler.h network4.h network6.h ido.h socket.h ntp_packet.h ntp_algorithms.h time_sync.h filter.h leap_second.h reference_clock.h autokey.h
 ALL_SRC := $(SRC) *.c
 ALL_HDR := $(HDR) *.h
 

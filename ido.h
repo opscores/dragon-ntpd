@@ -1,28 +1,32 @@
 /*
- * ido.h - I-DO Capability Negotiation Header
+ * ido.h - I-DO/Autokey Capability Negotiation Header
  *
  * RFC 5905 Section 8.4: Message Authentication Code (MAC) Extension
+ * RFC 5906: Autokey Security Protocol
  *
  * I-DO (I-DO Offer/Response) Capability Negotiation
+ * Autokey (Autokey Offer/Response/Key Management)
  *
- * This header defines the I-DO state machine and functions for
+ * This header defines the state machine and functions for
  * negotiating message authentication capabilities between NTP peers.
  *
  * States:
- *   - IDLE: Initial state, no I-DO negotiation
- *   - OFFER_RECEIVED: I-DO Offer received from server
- *   - RESPONSE_SENT: I-DO Response sent to server
+ *   - IDLE: Initial state, no negotiation
+ *   - OFFER_RECEIVED: Offer received from peer
+ *   - RESPONSE_SENT: Response sent to peer
  *   - AUTHENTICATED: Authentication established
- *   - REJECTED: I-DO negotiation failed
+ *   - REJECTED: Negotiation failed
  *
  * Capability Flags:
- *   - IDO_CAP_OFFER (0x01): Server offers authentication
+ *   - IDO_CAP_OFFER (0x01): Peer offers authentication
  *   - IDO_CAP_RESPONSE (0x02): Client responds to offer
  *   - IDO_CAP_RESERVED (0x04): Reserved for future use
  *
  * Extension Field Types:
  *   - I-DO Offer: type=0x0007
  *   - I-DO Response: type=0x8007
+ *   - Autokey Offer: type=0x000A
+ *   - Autokey Response: type=0x800A
  */
 
 #ifndef IDO_H
@@ -31,11 +35,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* I-DO State Machine States */
+/* I-DO/Autokey State Machine States */
 typedef enum { IDO_STATE_IDLE = 0, IDO_STATE_OFFER_RECEIVED, IDO_STATE_RESPONSE_SENT, IDO_STATE_AUTHENTICATED, IDO_STATE_REJECTED } IdoState_t;
 
-/* I-DO Capability Flags */
-#define IDO_CAP_OFFER (0x01)    /* Server offers authentication */
+/* I-DO/Autokey Capability Flags */
+#define IDO_CAP_OFFER (0x01)    /* Peer offers authentication */
 #define IDO_CAP_RESPONSE (0x02) /* Client responds to offer */
 #define IDO_CAP_RESERVED (0x04) /* Reserved for future use */
 
@@ -43,15 +47,22 @@ typedef enum { IDO_STATE_IDLE = 0, IDO_STATE_OFFER_RECEIVED, IDO_STATE_RESPONSE_
 #define IDO_EF_TYPE_OFFER (0x0007)    /* I-DO Offer */
 #define IDO_EF_TYPE_RESPONSE (0x8007) /* I-DO Response */
 
-/* I-DO State Structure */
+/* Autokey Extension Field Types */
+#define IDO_EF_AUTOKEY_OFFER (0x000A)       /* Autokey Offer */
+#define IDO_EF_AUTOKEY_RESPONSE (0x800A)    /* Autokey Response */
+#define IDO_EF_AUTOKEY_KEY_INSTALL (0x000B) /* Key Install */
+#define IDO_EF_AUTOKEY_KEY_ROTATE (0x000C)  /* Key Rotate */
+#define IDO_EF_AUTOKEY_KEY_REVOKE (0x000D)  /* Key Revoke */
+
+/* I-DO/Autokey State Structure */
 typedef struct {
     uint8_t ido_state;          /* Current state machine state */
-    uint8_t ido_offer_received; /* I-DO Offer received from server */
-    uint8_t ido_response_sent;  /* I-DO Response sent to server */
+    uint8_t ido_offer_received; /* Offer received from peer */
+    uint8_t ido_response_sent;  /* Response sent to peer */
     uint8_t ido_capabilities;   /* Capability flags */
-    uint8_t ido_key_id;         /* Key identifier (for future) */
-    uint8_t ido_key[16];        /* MAC key (for future, 128-bit) */
-    uint8_t ido_enabled;        /* I-DO enabled flag */
+    uint8_t ido_key_id;         /* Key identifier (Autokey) */
+    uint8_t ido_key[20];        /* HMAC-SHA1 key (20 bytes) */
+    uint8_t ido_enabled;        /* Authentication enabled flag */
     uint8_t ido_authenticated;  /* Authentication established */
 } IdoState;
 

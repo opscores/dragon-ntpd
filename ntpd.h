@@ -150,6 +150,8 @@ typedef struct {
     NtpTimestamp recv_ts;
     NtpTimestamp xmit_ts;
     size_t extension_len;
+    uint8_t key_id;         /* Key identifier (8 bits) */
+    uint8_t mac_digest[20]; /* HMAC-SHA1 digest (20 bytes) */
 } NtpPacket;
 
 typedef struct {
