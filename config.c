@@ -61,15 +61,18 @@ void print_usage(const char* prog) {
     printf("  -4, --ipv4        Use IPv4 only (default: dual-stack)\n");
     printf("  -6, --ipv6        Use IPv6 only\n");
     printf("  -b, --broadcast   Enable broadcast mode (RFC 5905)\n");
-    printf("  -B, --broadcast-addr=IP  Broadcast address (default: 255.255.255.255)\n");
+    printf("  -B, --broadcast-addr=IP  Broadcast address (default: "
+           "255.255.255.255)\n");
     printf("  -u, --user=USER    Run as specified user\n");
     printf("  -p, --pid=FILE     PID file path (default: %s)\n", DEFAULT_PID_FILE);
     printf("\n");
     printf("Autokey Options (RFC 5906):\n");
-    printf("  -k, --key=FILE     Key file path (default: /etc/ntp/keys/autokey.key)\n");
+    printf("  -k, --key=FILE     Key file path (default: "
+           "/etc/ntp/keys/autokey.key)\n");
     printf("  -K, --key-id=ID    Key ID (default: 0)\n");
     printf("  -L, --key-length=LEN  Key length in bits (default: 128)\n");
-    printf("  -C, --crypto=LIB   Crypto library: libgcrypt|openssl (default: libgcrypt)\n");
+    printf("  -C, --crypto=LIB   Crypto library: libgcrypt|openssl (default: "
+           "libgcrypt)\n");
     printf("  --storage=TYPE     Key storage: RAM|FILE|BOTH (default: BOTH)\n");
     printf("\n");
 }

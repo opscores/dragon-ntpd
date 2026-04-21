@@ -135,7 +135,8 @@ bool ido_process_offer(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length,
  * RFC 5906: Client sends Autokey Response to server
  *
  * @param ido_state Pointer to IdoState structure
- * @param ef_type Extension field type (0x8007=I-DO Response, 0x800A=Autokey Response)
+ * @param ef_type Extension field type (0x8007=I-DO Response, 0x800A=Autokey
+ * Response)
  * @param ef_length Extension field length
  * @param ef_data Extension field data
  *
@@ -268,14 +269,10 @@ bool ido_process_skip(IdoState* ido_state, uint16_t ef_type, uint8_t ef_length) 
  *   │                            │
  *   │                            ├─ Send Autokey Response ──→ RESPONSE_SENT
  *   │                            │                             │
- *   │                            │                             ├─ Key installation
- *   │                            │                             │
- *   │                            │                             └─ Authentication
- * ──→ REJECTED
- *   │
- *   └─ Autokey Response sent ──→ RESPONSE_SENT
- *                                │
- *                                └─ No offer received ──→ REJECTED
+ *   │                            │                             ├─ Key
+ * installation │                            │                             │ │
+ * │                             └─ Authentication ──→ REJECTED │ └─ Autokey
+ * Response sent ──→ RESPONSE_SENT │ └─ No offer received ──→ REJECTED
  */
 uint8_t ido_state_machine(IdoState* ido_state, uint8_t event) {
     if (ido_state == NULL) { return IDO_STATE_IDLE; }

@@ -17,7 +17,8 @@ void write_u32be(uint8_t* p, uint32_t v) {
 }
 
 /* Note: All other utility functions are defined in their respective modules:
- * - nport(), npton(), print_usage(), print_version(), parse_arguments() → config.c
+ * - nport(), npton(), print_usage(), print_version(), parse_arguments() →
+ * config.c
  * - load_server_config(), cleanup_resources(), apply_user_privileges() → main.c
  * - MARX filter functions → filter.c
  * - Time functions (ntp_timestamp_now, get_system_precision) → time_sync.c

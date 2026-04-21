@@ -10,10 +10,12 @@
  */
 
 /* RFC 5905 Section 11.3 - Clock discipline constants */
-#define CLOCK_PHI 15e-6            /* Max frequency error (s/s) = 15 PPM */
-#define CLOCK_PLLGAIN 8            /* PLL loop gain (log2) */
-#define CLOCK_FLLGAIN 4            /* FLL loop gain (log2) */
-#define CLOCK_ALLAN_INTERCEPT 1500 /* Allan intercept (sec), RFC 5905 default */
+#define CLOCK_PHI 15e-6 /* Max frequency error (s/s) = 15 PPM */
+#define CLOCK_PLLGAIN 8 /* PLL loop gain (log2) */
+#define CLOCK_FLLGAIN 4 /* FLL loop gain (log2) */
+#define CLOCK_ALLAN_INTERCEPT                                                                                                                                  \
+    1500 /* Allan intercept (sec), RFC 5905 default                                                                                                            \
+          */
 #define FREQ_UPDATE_INTERVAL_MIN_SEC 64
 
 /* RFC 5905 Section 11.3 - Loop filter constants */

@@ -256,14 +256,10 @@ bool autokey_process_skip(AutokeyState* state, uint16_t ef_type, uint8_t ef_leng
  *   │                            │
  *   │                            ├─ Send Autokey Response ──→ RESPONSE_SENT
  *   │                            │                             │
- *   │                            │                             ├─ Key installation
- *   │                            │                             │
- *   │                            │                             └─ Authentication
- * ──→ REJECTED
- *   │
- *   └─ Autokey Response sent ──→ RESPONSE_SENT
- *                                │
- *                                └─ No offer received ──→ REJECTED
+ *   │                            │                             ├─ Key
+ * installation │                            │                             │ │
+ * │                             └─ Authentication ──→ REJECTED │ └─ Autokey
+ * Response sent ──→ RESPONSE_SENT │ └─ No offer received ──→ REJECTED
  */
 uint8_t autokey_state_machine(AutokeyState* state, uint8_t event) {
     if (state == NULL) { return AUTOKEY_STATE_IDLE; }

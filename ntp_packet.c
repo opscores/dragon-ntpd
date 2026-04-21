@@ -17,7 +17,8 @@
  * ============================================================================
  */
 
-/* read_u32be() and write_u32be() are declared in ntp_packet.h and defined in ntpd.c */
+/* read_u32be() and write_u32be() are declared in ntp_packet.h and defined in
+ * ntpd.c */
 
 /* ============================================================================
  * Extension Field Types (RFC 5905 Section 7.5)
@@ -343,7 +344,8 @@ static int skip_extension_fields(const uint8_t* data, size_t size) {
         if (field_type == NTP_EF_AUTOKEY_KEY_INSTALL || field_type == NTP_EF_AUTOKEY_KEY_ROTATE || field_type == NTP_EF_AUTOKEY_KEY_REVOKE) {
             syslog(LOG_DEBUG, "Autokey Key Install/Rotate/Revoke extension field at offset %zu", pos);
 
-            /* Use autokey_process_skip() for tracking Autokey fields without full processing */
+            /* Use autokey_process_skip() for tracking Autokey fields without full
+             * processing */
             bool ret_skip = autokey_process_skip(&g_ido_state, field_type, (uint8_t)(field_len - 4));
             if (!ret_skip) { syslog(LOG_WARNING, "Autokey skip processing failed"); }
 
